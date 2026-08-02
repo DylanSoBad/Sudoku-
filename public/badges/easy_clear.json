@@ -1,0 +1,8 @@
+{
+  "name": "Easy Clear",
+  "level": 3,
+  "description": "Solve Level 3",
+  "tier": "easy",
+  "image": "badges/easy_clear.svg",
+  "issuedBy": "sudoku::registry"
+}

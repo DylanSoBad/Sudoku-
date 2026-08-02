@@ -1,0 +1,8 @@
+{
+  "name": "Master",
+  "level": 20,
+  "description": "Solve Level 20",
+  "tier": "master",
+  "image": "badges/master.svg",
+  "issuedBy": "sudoku::registry"
+}

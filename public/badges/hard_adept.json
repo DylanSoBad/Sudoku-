@@ -1,0 +1,8 @@
+{
+  "name": "Hard Adept",
+  "level": 10,
+  "description": "Solve Level 10",
+  "tier": "hard",
+  "image": "badges/hard_adept.svg",
+  "issuedBy": "sudoku::registry"
+}

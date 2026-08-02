@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: theme("colors.shelby.bg"); color: theme("colors.shelby.fg-strong"); min-height: 100%; }
+body { font-family: theme("fontFamily.sans"); -webkit-font-smoothing: antialiased; }
+a { text-decoration: none; color: inherit; }
+button { font: inherit; }
+::selection { background: theme("colors.shelby.accent"); color: white; }

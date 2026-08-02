@@ -1,0 +1,97 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { Ticket, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  getSeasonPass,
+  isSeasonPassActive,
+  purchaseSeasonPassLocal,
+  type SeasonPassState,
+} from "@/lib/season-pass";
+import { SEASON_PASS } from "@/lib/tokenomics";
+import { buildPurchaseSeasonPassPayload } from "@/lib/contracts";
+import { getAptosClient } from "@/lib/balances";
+import { useT } from "@/components/app-providers";
+
+export function SeasonPassCard() {
+  const t = useT();
+  const { connected, signAndSubmitTransaction } = useWallet();
+  const [pass, setPass] = useState<SeasonPassState | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => setPass(getSeasonPass());
+    refresh();
+    window.addEventListener("shelby:season-pass", refresh);
+    return () => window.removeEventListener("shelby:season-pass", refresh);
+  }, []);
+
+  const active = isSeasonPassActive();
+
+  const buy = async () => {
+    if (!connected) {
+      toast.error(t.faucet.connectFirst);
+      return;
+    }
+    setLoading(true);
+    try {
+      let txHash: string | undefined;
+      let source: "local" | "chain" = "local";
+      try {
+        const payload = buildPurchaseSeasonPassPayload({
+          priceMicro: Math.round(SEASON_PASS.priceShelbyUsd * 1_000_000),
+        });
+        const pending = await signAndSubmitTransaction(payload);
+        const aptos = getAptosClient();
+        await aptos.waitForTransaction({ transactionHash: pending.hash });
+        txHash = pending.hash;
+        source = "chain";
+        toast.success("Season Pass purchased on-chain");
+        window.dispatchEvent(new CustomEvent("shelby:balances"));
+      } catch (err) {
+        console.warn("[shelby:fallback] season_pass purchase local", err);
+        toast.message(t.seasonPass.localPurchase);
+      }
+      const next = purchaseSeasonPassLocal(txHash, source);
+      setPass(next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Purchase failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card data-tour="season-pass">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Ticket className="h-5 w-5 text-shelby-accent2" />
+          {t.seasonPass.title}
+          {active ? <Badge variant="accent">Active</Badge> : null}
+        </CardTitle>
+        <CardDescription>{t.seasonPass.description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-shelby-muted">{t.seasonPass.benefits}</p>
+        {active && pass ? (
+          <p className="text-sm text-shelby-gold">
+            {t.seasonPass.activeUntil}{" "}
+            <span className="font-mono">
+              {new Date(pass.expiresAt).toLocaleDateString()}
+            </span>
+          </p>
+        ) : (
+          <Button onClick={() => void buy()} disabled={loading} className="w-full">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {t.seasonPass.buy} ({SEASON_PASS.priceShelbyUsd} sUSD)
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
