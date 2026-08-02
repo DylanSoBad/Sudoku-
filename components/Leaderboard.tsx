@@ -22,11 +22,20 @@ export function Leaderboard() {
     setEntries(allEntries());
   }, [tab]);
 
+  // Drop malformed rows so localStorage from older versions can't crash hydration.
+  const safeEntries = entries.filter(
+    (e): e is Entry & { address: string; ts: number; ms: number; level: number } =>
+      typeof e?.address === "string" &&
+      typeof e?.ts === "number" &&
+      typeof e?.ms === "number" &&
+      typeof e?.level === "number",
+  );
+
   const filtered = (() => {
-    if (tab === "Level") return entries;
-    if (tab === "Daily") return entries.filter((e) => e.level === 0);
+    if (tab === "Level") return safeEntries;
+    if (tab === "Daily") return safeEntries.filter((e) => e.level === 0);
     const lvl = Number(tab);
-    return entries.filter((e) => e.level === lvl).slice(0, 10);
+    return safeEntries.filter((e) => e.level === lvl).slice(0, 10);
   })();
 
   return (
