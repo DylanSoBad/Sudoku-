@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { WalletBadge } from "./WalletBadge";
+import { ReadLedgerCounter } from "./ReadLedgerCounter";
 
 export function Header() {
   return (
@@ -19,7 +20,10 @@ export function Header() {
         <Link href="/#badges" className="hover:text-shelby-fg-strong">Badges</Link>
         <Link href="/curator" className="hover:text-shelby-fg-strong">Curator</Link>
       </nav>
-      <WalletBadge />
+      <div className="flex items-center gap-3">
+        <ReadLedgerCounter />
+        <WalletBadge />
+      </div>
     </header>
   );
 }

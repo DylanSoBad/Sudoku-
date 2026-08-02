@@ -108,7 +108,20 @@ export function PlayLevelPage() {
       {puzzle ? (
         <>
           <div className="flex items-center justify-between text-sm text-shelby-muted">
-            <span>{puzzle.difficulty.toUpperCase()} · {puzzle.empties} empty</span>
+            <span>
+              {(() => {
+                const econ = economicsForLevel(level);
+                if (!econ || typeof econ.empties !== "number") {
+                  if (process.env.NODE_ENV !== "production") {
+                    throw new Error(
+                      `tokenomics: missing empties for level ${level}`,
+                    );
+                  }
+                  return `${puzzle.difficulty.toUpperCase()} · empty`;
+                }
+                return `${econ.difficulty.toUpperCase()} · ${econ.empties} empty`;
+              })()}
+            </span>
             <span>{fmt(elapsedMs)}</span>
             <span>{hintCount} hint{hintCount === 1 ? "" : "s"}</span>
           </div>

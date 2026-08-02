@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { WalletProvider } from "@/components/wallet-provider";
 import { AppProviders } from "@/components/app-providers";
+import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
   title: "Sudoku on Shelby",
@@ -15,7 +16,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <WalletProvider>
-          <AppProviders>{children}</AppProviders>
+          <AppProviders>
+            <Header />
+            {children}
+          </AppProviders>
         </WalletProvider>
       </body>
     </html>

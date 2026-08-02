@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Header } from "@/components/Header";
 import { LevelMap } from "@/components/LevelMap";
 import { Leaderboard } from "@/components/Leaderboard";
 import { FaucetPanel } from "@/components/Faucet";
@@ -19,7 +18,6 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-shelby-bg text-shelby-fg-strong">
       <ToastProvider />
-      <Header />
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8">
         <section className="space-y-3">
           <p className="text-xs uppercase tracking-wider text-shelby-accent2">

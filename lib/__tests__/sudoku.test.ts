@@ -6,6 +6,7 @@ import {
   firstEmpty,
   fnv1a,
   generateFullSolution,
+  generatePuzzleWithSeed,
   isSolved,
   mulberry32,
 } from "../sudoku.ts";
@@ -116,4 +117,25 @@ test("solver correctness on a fixed easy board (level 1)", () => {
     false,
     "removing a single cell should never introduce a conflict",
   );
+});
+
+test("easy puzzle keeps givens on every row after removal (36 empties)", () => {
+  // generatePuzzleWithSeed for an easy level (≤3) must produce 36 empties
+  // such that no row is fully empty AND no row is fully filled.
+  for (let s = 0; s < 25; s++) {
+    const seed = (s * 0x9e3779b1 + 0x12345) >>> 0;
+    const { puzzle } = generatePuzzleWithSeed(1, seed);
+    assert.equal(puzzle.length, 81, "puzzle must have 81 cells");
+    let zeroCount = 0;
+    for (const v of puzzle) if (v === 0) zeroCount++;
+    assert.equal(zeroCount, 36, `seed ${seed} should remove exactly 36 cells`);
+    for (let r = 0; r < 9; r++) {
+      let rowEmpty = 0;
+      for (let c = 0; c < 9; c++) {
+        if (puzzle[r * 9 + c] === 0) rowEmpty++;
+      }
+      assert.notEqual(rowEmpty, 0, `row ${r} is fully empty for seed ${seed}`);
+      assert.notEqual(rowEmpty, 9, `row ${r} is fully filled for seed ${seed}`);
+    }
+  }
 });

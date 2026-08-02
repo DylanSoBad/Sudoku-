@@ -260,11 +260,13 @@ export interface FetchedPuzzle {
 // Newer code expects `hintPrice`; alias it.
 export type PuzzleMetaWithHintPrice = PuzzleMeta;
 
-// Helper: remove cells from a fully-solved board using per-box quotas so
-// givens stay evenly distributed across all nine 3x3 boxes. Without this,
-// sequential seed math clusters empties in a single region and players
-// can end up with a quadrant that has no placeable digits.
-function carveByBox(
+// Helper: remove cells from a fully-solved board by shuffling ALL 81
+// cell indices with the deterministic RNG (FNV-1a + mulberry32) and
+// flipping them to EMPTY one by one until `empties` is reached.
+//
+// We never carve whole rows or columns: every cell is visited in a
+// permutation, which guarantees scattered givens on the finished puzzle.
+function carveByShuffle(
   puzzle: Board,
   empties: number,
   rng: () => number,
@@ -272,36 +274,17 @@ function carveByBox(
   const target = Math.max(0, Math.min(81, empties));
   if (target === 0) return 0;
 
-  // Distribute empties across boxes as evenly as possible.
-  const base = Math.floor(target / 9);
-  const extra = target - base * 9; // 0..8 boxes get one extra empty
-
-  // Pick which boxes get the extra empty (deterministic via rng).
-  const boxOrder = shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8], rng);
+  const indices = shuffle(
+    Array.from({ length: 81 }, (_, i) => i),
+    rng,
+  );
 
   let removed = 0;
-  for (let b = 0; b < 9; b++) {
-    const boxIndex = boxOrder[b];
-    const br = ((boxIndex / 3) | 0) * 3;
-    const bc = (boxIndex % 3) * 3;
-
-    // Cell indices inside this box, shuffled.
-    const cellOffsets = shuffle(
-      [0, 1, 2, 3, 4, 5, 6, 7, 8],
-      rng,
-    );
-    const want = base + (b < extra ? 1 : 0);
-
-    let taken = 0;
-    for (const off of cellOffsets) {
-      if (taken >= want) break;
-      const i = (br + ((off / 3) | 0)) * 9 + (bc + (off % 3));
-      if (puzzle[i] !== 0) {
-        puzzle[i] = 0;
-        removed++;
-        taken++;
-        if (removed >= target) return removed;
-      }
+  for (const i of indices) {
+    if (removed >= target) break;
+    if (puzzle[i] !== 0) {
+      puzzle[i] = 0;
+      removed++;
     }
   }
   return removed;
@@ -317,7 +300,7 @@ export function generatePuzzle(level: number, a: number, b?: number): GeneratedP
     const sol = generateFullSolution(seed);
     const puzzle = sol.slice();
     const rng = mulberry32(seed ^ 0x9e3779b9);
-    const removed = carveByBox(puzzle, empties, rng);
+    const removed = carveByShuffle(puzzle, empties, rng);
     return { puzzle, solution: sol, meta: { ...meta, empties: removed } };
   }
   return generatePuzzleWithSeed(level, a);
@@ -345,7 +328,7 @@ export function generatePuzzleWithSeed(level: number, seed: number): GeneratedPu
   const sol = generateFullSolution(seed);
   const puzzle = sol.slice();
   const rng = mulberry32(seed ^ 0x517cc1b7);
-  const removed = carveByBox(puzzle, meta.empties, rng);
+  const removed = carveByShuffle(puzzle, meta.empties, rng);
   return { puzzle, solution: sol, meta: { ...meta, empties: removed } };
 }
 

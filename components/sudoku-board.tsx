@@ -132,34 +132,48 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
     <div
       role="grid"
       aria-label="Sudoku board"
-      className="grid w-full max-w-md select-none grid-cols-9 gap-px rounded-lg bg-shelby-border p-px"
+      className="relative w-full max-w-md select-none overflow-hidden rounded-lg border-2 border-white/40 bg-shelby-border"
     >
-      {board.map((v, i) => {
-        const r = rowOf(i);
-        const c = colOf(i);
-        const isCursor = i === cursor;
-        const isHighlight = highlight !== undefined && (rowOf(highlight) === r || colOf(highlight) === c || (Math.floor(r / 3) === Math.floor(rowOf(highlight) / 3) && Math.floor(c / 3) === Math.floor(colOf(highlight) / 3)));
-        return (
-          <button
-            key={i}
-            type="button"
-            role="gridcell"
-            onClick={() => onCellClick(i)}
-            aria-label={`row ${r + 1} column ${c + 1} value ${v || "empty"}`}
-            className={cn(
-              "flex aspect-square items-center justify-center bg-shelby-bg text-base font-semibold",
-              isGiven[i] ? "text-shelby-fg-strong" : "text-shelby-accent2",
-              conflictMask[i] && "text-shelby-danger",
-              isCursor && "ring-2 ring-shelby-accent",
-              isHighlight && !isCursor && "bg-shelby-surface",
-              c === 2 || c === 5 ? "mr-px" : "",
-              r === 2 || r === 5 ? "mb-px" : "",
-            )}
-          >
-            {v === 0 ? "" : v}
-          </button>
-        );
-      })}
+      <div className="grid w-full grid-cols-9 bg-shelby-border">
+        {board.map((v, i) => {
+          const r = rowOf(i);
+          const c = colOf(i);
+          const isCursor = i === cursor;
+          const isHighlight =
+            highlight !== undefined &&
+            (rowOf(highlight) === r ||
+              colOf(highlight) === c ||
+              (Math.floor(r / 3) === Math.floor(rowOf(highlight) / 3) &&
+                Math.floor(c / 3) === Math.floor(colOf(highlight) / 3)));
+          const rightBoxEdge = c === 2 || c === 5;
+          const bottomBoxEdge = r === 2 || r === 5;
+          const outerRight = c === 8;
+          const outerBottom = r === 8;
+          return (
+            <button
+              key={i}
+              type="button"
+              role="gridcell"
+              onClick={() => onCellClick(i)}
+              aria-label={`row ${r + 1} column ${c + 1} value ${v || "empty"}`}
+              className={cn(
+                "flex aspect-square items-center justify-center bg-shelby-bg text-base font-semibold",
+                "border-white/10",
+                rightBoxEdge ? "border-r-2 border-r-white/40" : "border-r",
+                bottomBoxEdge ? "border-b-2 border-b-white/40" : "border-b",
+                outerRight && "border-r-0",
+                outerBottom && "border-b-0",
+                isGiven[i] ? "text-shelby-fg-strong" : "text-shelby-accent2",
+                conflictMask[i] && "text-shelby-danger",
+                isCursor && "ring-2 ring-shelby-accent",
+                isHighlight && !isCursor && "bg-shelby-surface",
+              )}
+            >
+              {v === 0 ? "" : v}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 });
