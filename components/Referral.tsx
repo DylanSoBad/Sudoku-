@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { creditShelbyUSD, debitShelbyUSD } from "@/lib/balances";
 import { REFERRAL_BONUS_SUSD } from "@/lib/tokenomics";
 
 const KEY = "shelby-sudoku-referral";
@@ -48,9 +47,11 @@ export function Referral() {
     }
     saveReferral({ inviter: cleaned, lastIssued: Date.now() });
     setInviter(cleaned);
-    creditShelbyUSD(account.address, REFERRAL_BONUS_SUSD);
-    creditShelbyUSD(cleaned, REFERRAL_BONUS_SUSD);
-    setStatus(`+${REFERRAL_BONUS_SUSD} sUSD for both sides`);
+    // Referral bonus is settled on-chain via the Move package once
+    // NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is set; until then UI shows the
+    // expected reward only.
+    window.dispatchEvent(new CustomEvent("shelby:balances"));
+    setStatus(`+${REFERRAL_BONUS_SUSD} sUSD for both sides (settled on-chain)`);
     setCode("");
   }
 

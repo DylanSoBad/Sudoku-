@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { useWallet, type InputTransactionData } from "@aptos-labs/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { encodePuzzleBlob } from "@/lib/blob-layout";
-import { getShelbyClient, getRegisterClient } from "@/lib/shelby";
+import { getShelbyClient } from "@/lib/shelby";
 import { economicsForLevel } from "@/lib/tokenomics";
 import { generatePuzzle, fnv1a } from "@/lib/sudoku";
+import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
 
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+function toHexBytes(input: string | Uint8Array): string {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  return `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function CuratorPanel() {
@@ -19,7 +25,8 @@ export function CuratorPanel() {
   const [busy, setBusy] = useState<null | "upload" | "register">(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hash, setHash] = useState<string | null>(null);
+  const [uploadTxHash, setUploadTxHash] = useState<string | null>(null);
+  const [registerTxHash, setRegisterTxHash] = useState<string | null>(null);
   const [commitment, setCommitment] = useState<string | null>(null);
 
   const preview = useMemo(() => {
@@ -39,7 +46,8 @@ export function CuratorPanel() {
   useEffect(() => {
     setStatus(null);
     setError(null);
-    setHash(null);
+    setUploadTxHash(null);
+    setRegisterTxHash(null);
     setCommitment(null);
   }, [level]);
 
@@ -53,36 +61,37 @@ export function CuratorPanel() {
     try {
       const client = await getShelbyClient();
       if (!client) throw new Error("Shelby SDK unavailable");
+      // 1. calculate a small commitment (full blob as hex bytes) so the
+      //    on-chain registry can reference the exact blob the player will
+      //    fetch.
+      const blobName = `shelby-sudoku-level-${level}`;
+      const commitHex = toHexBytes(preview);
+
       await client.upload({
         account: account.address,
-        blobName: `shelby-sudoku-level-${level}`,
+        blobName,
         bytes: preview,
       });
+      setCommitment(commitHex);
       setStatus("uploaded");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
-  }
 
-  async function register() {
-    if (!account?.address) {
-      setError("Connect wallet");
-      return;
-    }
-    setBusy("register");
-    setError(null);
-    try {
-      const reg = await getRegisterClient();
-      if (!reg?.registerPayload) throw new Error("register client unavailable");
-      const payload = await reg.registerPayload({
-        account: account.address,
-        blobName: `shelby-sudoku-level-${level}`,
-        blobBytes: preview,
-      });
-      const tx = await signAndSubmitTransaction({ data: payload as never });
-      setHash(tx.hash);
+      // Auto-fire registry::register_puzzle on-chain.
+      const registry = registryAddress();
+      if (!registry) {
+        setError("Upload succeeded but NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is empty");
+        return;
+      }
+      setBusy("register");
+      const payload: InputTransactionData = {
+        data: {
+          function: `${registry}::registry::register_puzzle`,
+          typeArguments: [],
+          functionArguments: [level, blobName, commitHex],
+        },
+      };
+      const pending = await signAndSubmitTransaction(payload);
+      await waitForTxSuccess(pending.hash);
+      setRegisterTxHash(pending.hash);
       setStatus("registered");
     } catch (e) {
       setError((e as Error).message);
@@ -96,7 +105,8 @@ export function CuratorPanel() {
       <header>
         <h1 className="text-xl font-semibold">Curator</h1>
         <p className="text-sm text-shelby-muted">
-          Generate a fresh puzzle blob, upload to Shelby, and register on-chain.
+          Generate a fresh puzzle blob, upload to Shelby, and register on-chain via
+          <code className="ml-1 font-mono">registry::register_puzzle</code>.
         </p>
       </header>
 
@@ -122,34 +132,39 @@ export function CuratorPanel() {
 
       <section className="rounded-xl border border-shelby-border bg-shelby-surface p-4">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-shelby-muted">
-          2. Upload
-        </h2>
-        <Button onClick={uploadBlob} disabled={busy !== null || !account}>
-          {busy === "upload" ? "Uploading…" : "Upload to Shelby"}
-        </Button>
-      </section>
-
-      <section className="rounded-xl border border-shelby-border bg-shelby-surface p-4">
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-shelby-muted">
-          3. Register
+          2. Upload + Register
         </h2>
         <p className="mb-2 text-xs text-shelby-muted">
-          Calls <code className="font-mono">blob_metadata::register_blob</code> on Aptos testnet.
+          Uploads to Shelby and auto-signs the on-chain registry tx.
         </p>
-        <Button onClick={register} disabled={busy !== null || !account}>
-          {busy === "register" ? "Signing…" : "Register on-chain"}
+        <Button onClick={uploadBlob} disabled={busy !== null || !account}>
+          {busy === "upload"
+            ? "Uploading…"
+            : busy === "register"
+              ? "Signing registry tx…"
+              : "Upload + Register"}
         </Button>
         {commitment && (
-          <p className="mt-2 break-all text-xs text-shelby-muted">commitments: {commitment}</p>
+          <p className="mt-2 break-all text-xs text-shelby-muted">commitment: {commitment}</p>
         )}
-        {hash && (
+        {uploadTxHash && (
           <a
             className="mt-2 block break-all text-xs text-shelby-accent2 underline"
-            href={`https://explorer.aptoslabs.com/txn/${hash}?network=testnet`}
+            href={`https://explorer.aptoslabs.com/txn/${uploadTxHash}?network=testnet`}
             target="_blank"
             rel="noreferrer"
           >
-            tx: {hash}
+            Shelby upload tx: {uploadTxHash}
+          </a>
+        )}
+        {registerTxHash && (
+          <a
+            className="mt-2 block break-all text-xs text-shelby-accent2 underline"
+            href={`https://explorer.aptoslabs.com/txn/${registerTxHash}?network=testnet`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Registry tx: {registerTxHash}
           </a>
         )}
       </section>

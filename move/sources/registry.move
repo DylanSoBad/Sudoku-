@@ -1,62 +1,52 @@
-/// Registry of puzzle blobs published by the curator.
-/// Maps `(level, epoch_day)` to a blob name + merkle root on Shelby.
+/// On-chain registry of Sudoku puzzles stored on Shelby. Each puzzle
+/// commits to a blob_name + a small commitment (Merkle root or hash) so
+/// off-chain consumers can verify the blob they download.
 module sudoku::registry {
     use aptos_framework::event;
-    use std::signer;
-    use std::vector;
+    use aptos_std::table::{Self, Table};
+    use std::string::String;
 
-    struct PuzzleRef has copy, drop, store {
+    struct Puzzle has key, store, copy, drop {
         level: u64,
-        epoch_day: u64,
-        blob_name: vector<u8>,
-        merkle_root: vector<u8>,
-        ts_ms: u64,
+        blob_name: String,
+        commitment: vector<u8>,
     }
 
-    struct PuzzleRegistry has key {
-        entries: vector<PuzzleRef>,
+    struct Registry has key {
+        puzzles: Table<u64, Puzzle>,
     }
 
     #[event]
-    struct PuzzleRegistered has drop, store { level: u64, blob_name: vector<u8> }
+    struct PuzzleRegistered has drop, store { level: u64, blob_name: String, commitment: vector<u8> }
 
-    public entry fun init(account: &signer) {
-        move_to(account, PuzzleRegistry { entries: vector::empty<PuzzleRef>() });
+    public entry fun init(admin: &signer) {
+        move_to(admin, Registry { puzzles: table::new<u64, Puzzle>() });
     }
 
     public entry fun register_puzzle(
-        curator: &signer,
+        admin: &signer,
         level: u64,
-        epoch_day: u64,
-        blob_name: vector<u8>,
-        merkle_root: vector<u8>,
-        ts_ms: u64,
-    ) acquires PuzzleRegistry {
-        let addr = signer::address_of(curator);
-        let reg = borrow_global_mut<PuzzleRegistry>(addr);
-        let entry = PuzzleRef { level, epoch_day, blob_name, merkle_root, ts_ms };
-        vector::push_back(&mut reg.entries, entry);
-        event::emit(PuzzleRegistered { level, blob_name });
+        blob_name: String,
+        commitment: vector<u8>,
+    ) acquires Registry {
+        let r = borrow_global_mut<Registry>(@sudoku);
+        if (table::contains(&r.puzzles, level)) {
+            table::remove(&mut r.puzzles, level);
+        };
+        let p = Puzzle { level, blob_name, commitment };
+        table::add(&mut r.puzzles, level, p);
+        event::emit(PuzzleRegistered { level, blob_name, commitment });
     }
 
-    #[view]
-    public fun latest_for_level(addr: address, level: u64): (vector<u8>, vector<u8>, u64) acquires PuzzleRegistry {
-        let reg = borrow_global<PuzzleRegistry>(addr);
-        let n = vector::length(&reg.entries);
-        let i = n;
-        let out_name = vector::empty<u8>();
-        let out_root = vector::empty<u8>();
-        let out_ts: u64 = 0;
-        while (i > 0) {
-            i = i - 1;
-            let e = vector::borrow(&reg.entries, i);
-            if (e.level == level) {
-                out_name = e.blob_name;
-                out_root = e.merkle_root;
-                out_ts = e.ts_ms;
-                break
-            }
-        };
-        (out_name, out_root, out_ts)
+    public fun get_blob_name(level: u64): String acquires Registry {
+        let r = borrow_global<Registry>(@sudoku);
+        let p = table::borrow(&r.puzzles, level);
+        p.blob_name
+    }
+
+    public fun get_commitment(level: u64): vector<u8> acquires Registry {
+        let r = borrow_global<Registry>(@sudoku);
+        let p = table::borrow(&r.puzzles, level);
+        p.commitment
     }
 }

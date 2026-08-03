@@ -5,10 +5,11 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { explorerTxUrl, formatMs } from "@/lib/utils";
-import { rewardFor, registryConfigured } from "@/lib/tokenomics";
+import { rewardFor, MAX_LEVEL } from "@/lib/tokenomics";
 import { markCleared } from "@/lib/progress";
 import { useRouter } from "next/navigation";
-import { MAX_LEVEL } from "@/lib/tokenomics";
+import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
+import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
 
 export interface RewardModalProps {
   open: boolean;
@@ -24,30 +25,36 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
   const { account, signAndSubmitTransaction } = useWallet();
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
-  const [claimTxHash, setClaimTxHash] = useState<string | undefined>(undefined);
+  const [claimTxHash, setClaimTxHash] = useState<string | undefined>(txHash);
   const [claimError, setClaimError] = useState<string | undefined>(undefined);
 
   const reward = rewardFor(level);
-  const hasRegistry = registryConfigured();
+  const registry = registryAddress();
   const isLastLevel = level >= MAX_LEVEL;
 
   async function handleClaim() {
     if (!account) return;
+    if (!registry) {
+      setClaimError("NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is not set");
+      return;
+    }
     setClaiming(true);
     setClaimError(undefined);
     try {
-      const { buildClaimRewardPayload } = await import("@/lib/contracts");
-      const payload = buildClaimRewardPayload({
-        level,
-        sessionId: "local",
-        solutionMerkle: "0x",
-        timeMs: ms,
-        hintsUsed: hints,
-      });
-      const result = await signAndSubmitTransaction({ data: payload.data });
+      const txInput: InputTransactionData = {
+        data: {
+          function: `${registry}::rewards::claim`,
+          typeArguments: [],
+          functionArguments: [level],
+        },
+      };
+      const pending = await signAndSubmitTransaction(txInput);
+      await waitForTxSuccess(pending.hash);
       setClaimed(true);
-      setClaimTxHash(result.hash);
+      setClaimTxHash(pending.hash);
+      // Persist HMAC progress unlocking level N+1 only after success.
       await markCleared(account.address, level);
+      window.dispatchEvent(new CustomEvent("shelby:balances"));
     } catch (e) {
       setClaimError((e as Error).message ?? "Transaction failed");
     } finally {
@@ -79,13 +86,11 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
           <div className="mt-1 text-xs text-shelby-muted">
             {claimTxHash
               ? "Claimed on-chain"
-              : txHash
-                ? "On-chain via rewards::claim"
-                : hasRegistry
-                  ? claimed
-                    ? "Claimed on-chain"
-                    : "Ready to claim on-chain"
-                  : "Local credit (Move registry not configured)"}
+              : claimed
+                ? "Claimed on-chain"
+                : registry
+                  ? "Ready to claim on-chain"
+                  : "Move registry not configured"}
           </div>
         </div>
 
@@ -95,13 +100,13 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
           </div>
         )}
 
-        {hasRegistry && account && !claimed ? (
+        {registry && account && !claimed ? (
           <Button onClick={handleClaim} disabled={claiming} className="w-full">
             {claiming ? "Claiming…" : "Claim reward on-chain"}
           </Button>
         ) : !claimed ? (
           <Button disabled className="w-full opacity-60">
-            {hasRegistry && !account ? "Connect wallet to claim" : "Local credit (Move registry not configured)"}
+            {registry && !account ? "Connect wallet to claim" : "Move registry not configured"}
           </Button>
         ) : null}
 

@@ -1,16 +1,19 @@
 [package]
-name = "sudoku"
-version = "0.1.0"
+name = "SudokuShelby"
+version = "1.0.0"
 
 [addresses]
-sudoku = "0x0"
+# Override `sudoku` at publish time on the Playground with the deployer
+# Petra address. `shelby_usd` is the fixed testnet FA module address.
+sudoku     = "_"
+shelby_usd = "0x249f5c642a63885ff88a5113b3ba0079840af5a1357706f8c7f3bfc5dd12511f"
 
 [dependencies.AptosFramework]
-git = "https://github.com/aptos-labs/aptos-framework.git"
-rev = "mainnet"
-subdir = "aptos-framework"
+git    = "https://github.com/aptos-labs/aptos-core.git"
+rev    = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
 
 [dependencies.AptosStdlib]
-git = "https://github.com/aptos-labs/aptos-framework.git"
-rev = "mainnet"
-subdir = "aptos-stdlib"
+git    = "https://github.com/aptos-labs/aptos-core.git"
+rev    = "mainnet"
+subdir = "aptos-move/framework/aptos-stdlib"

@@ -4,7 +4,6 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { loadPrefs, savePrefs } from "@/lib/preferences";
-import { creditShelbyUSD, debitShelbyUSD } from "@/lib/balances";
 import { SEASON_PASS } from "@/lib/tokenomics";
 
 export function SeasonPass() {
@@ -27,7 +26,10 @@ export function SeasonPass() {
       setError("Already active");
       return;
     }
-    debitShelbyUSD(account.address, SEASON_PASS.price);
+    // Season pass is purchased on-chain via season_pass::purchase when the
+    // Move registry is configured. Until then we just flip the local flag
+    // (still useful for offline testing) without mutating balances.
+    window.dispatchEvent(new CustomEvent("shelby:balances"));
     savePrefs({
       ...next,
       seasonPass: true,

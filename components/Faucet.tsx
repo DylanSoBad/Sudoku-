@@ -4,7 +4,6 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { creditShelbyUSD } from "@/lib/balances";
 
 interface FaucetPanelProps {
   kind: "apt" | "shelbyusd";
@@ -35,7 +34,10 @@ export function FaucetPanel({ kind, label, endpoint }: FaucetPanelProps) {
       if (!res.ok) throw new Error(`Faucet ${res.status}: ${await res.text()}`);
       const data = await res.json().catch(() => ({}));
       setDone(data?.txnHash ?? data?.hash ?? "ok");
-      if (kind === "shelbyusd") creditShelbyUSD(account.address, 10);
+      // The real chain balance will refresh via the useBalances listener in
+      // the connected ConnectButton / WalletBadge once the tx lands; we don't
+      // mutate a local ledger here (spec forbids it).
+      window.dispatchEvent(new CustomEvent("shelby:balances"));
     } catch (e) {
       setError((e as Error).message);
     } finally {

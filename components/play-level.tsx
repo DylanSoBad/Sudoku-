@@ -9,7 +9,6 @@ import { RewardModal } from "./RewardModal";
 import { fetchPuzzle, type FetchedPuzzle } from "@/lib/fetcher";
 import { recordRead } from "./ReadLedger";
 import { findEmpty, isSolved as checkSolved } from "@/lib/sudoku";
-import { creditShelbyUSD, debitShelbyUSD } from "@/lib/balances";
 import { loadPrefs, effectiveHintCost } from "@/lib/preferences";
 import { economicsForLevel, DAILY_BONUS_MULT } from "@/lib/tokenomics";
 import { markCleared } from "@/lib/progress";
@@ -77,12 +76,12 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setIsSolved(true);
     setRewardOpen(true);
     if (account?.address) {
-      const econ = economicsForLevel(level);
-      const reward = econ.reward * (level === 0 ? DAILY_BONUS_MULT : 1);
-      creditShelbyUSD(account.address, reward);
+      // Reward is settled on-chain via the registered Move package (or the
+      // off-chain HMAC shim when registry is unset). Just bump UI signals.
       markCleared(account.address, level).catch(() => undefined);
       recordRun(account.address, level, Date.now() - startedAt.current);
       bumpStreak();
+      window.dispatchEvent(new CustomEvent("shelby:balances"));
     }
   }, [account?.address, level]);
 
@@ -95,7 +94,11 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       setError("Connect wallet to buy hints");
       return;
     }
-    debitShelbyUSD(account.address, cost);
+    // Hint cost is settled on-chain via hint_shop::buy_hint; the actual
+    // payment is debited by the Move package once `NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS`
+    // is configured. Until then the UI lets you tap a local hint and we just
+    // ask the wallet hook to refresh from chain.
+    window.dispatchEvent(new CustomEvent("shelby:balances"));
     const emptyIdx = findEmpty(boardRef.current?.getBoard() ?? []);
     if (emptyIdx < 0) return;
     boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);

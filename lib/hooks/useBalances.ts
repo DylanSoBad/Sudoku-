@@ -1,101 +1,109 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { getAptosClient } from "@/lib/aptos";
+import { toast } from "sonner";
+import { getAptBalance, getShelbyUsdBalance } from "@/lib/aptos";
 
 export interface Balances {
   apt: number;
   shelbyUSD: number;
 }
 
-const SHELBYUSD_LEDGER = "shelby-sudoku-shelbyusd";
+const POLL_MS_VISIBLE = 8_000;
 
-function readLedger(address: string): number {
-  if (typeof window === "undefined") return 0;
-  const raw = window.localStorage.getItem(`${SHELBYUSD_LEDGER}:${address.toLowerCase()}`);
-  if (!raw) return 0;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+function shorten(err: unknown): string {
+  if (err instanceof Error) return err.message.slice(0, 120);
+  if (typeof err === "string") return err.slice(0, 120);
+  return "Balance refresh failed";
 }
 
-function writeLedger(address: string, value: number): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    `${SHELBYUSD_LEDGER}:${address.toLowerCase()}`,
-    String(Math.max(0, value)),
-  );
-}
-
-export function creditShelbyUSD(address: string, amount: number): number {
-  const next = readLedger(address) + amount;
-  writeLedger(address, next);
-  return next;
-}
-
-export function debitShelbyUSD(address: string, amount: number): number {
-  const next = Math.max(0, readLedger(address) - amount);
-  writeLedger(address, next);
-  return next;
-}
-
-export function getShelbyUSD(address: string): number {
-  return readLedger(address);
-}
-
-export async function getAptBalance(address: string): Promise<number> {
-  const client = getAptosClient();
-  const amount = await client.getAccountAPTAmount({ accountAddress: address });
-  return Number(amount) / 1e8;
-}
-
-export async function getShelbyUsdBalance(address: string): Promise<number> {
-  return readLedger(address);
-}
-
-export async function loadBalances(address: string): Promise<Balances> {
-  try {
-    const apt = await getAptBalance(address);
-    return { apt, shelbyUSD: readLedger(address) };
-  } catch {
-    return { apt: 0, shelbyUSD: readLedger(address) };
-  }
-}
-
-export function useBalances(): { balances: Balances; refresh: () => Promise<void>; busy: boolean } {
+/**
+ * Polls APT and shelbyUSD balances for the connected wallet.
+ *
+ * - Refetches every 8 s while the tab is visible; pauses on `visibilitychange`.
+ * - Refetches on `accountChanged` (wallet-adapter emits via internal events)
+ *   and on the app-level `shelby:balances` event used after faucet/submit tx.
+ * - Emits a toast.error on failure but never throws — UI stays usable.
+ */
+export function useBalances(): {
+  apt: number;
+  susd: number;
+  loading: boolean;
+  refresh: () => Promise<void>;
+} {
   const { account } = useWallet();
-  const [balances, setBalances] = useState<Balances>({ apt: 0, shelbyUSD: 0 });
-  const [busy, setBusy] = useState(false);
+  const [apt, setApt] = useState(0);
+  const [susd, setSusd] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!account?.address) {
-      setBalances({ apt: 0, shelbyUSD: 0 });
+      setApt(0);
+      setSusd(0);
       return;
     }
-    setBusy(true);
+    setLoading(true);
+    const addr = account.address.toString();
     try {
-      const b = await loadBalances(account.address);
-      setBalances(b);
+      const [a, s] = await Promise.all([
+        getAptBalance(addr),
+        getShelbyUsdBalance(addr),
+      ]);
+      if (cancelledRef.current) return;
+      setApt(a);
+      setSusd(s);
+    } catch (err) {
+      if (!cancelledRef.current) {
+        toast.error(shorten(err) || "Balance refresh failed");
+      }
     } finally {
-      setBusy(false);
+      if (!cancelledRef.current) setLoading(false);
     }
   }, [account?.address]);
 
+  // Re-fetch on address change + while page is visible.
   useEffect(() => {
+    cancelledRef.current = false;
     void refresh();
-  }, [refresh]);
 
-  return { balances, refresh, busy };
+    const startPoll = () => {
+      stopPoll();
+      timerRef.current = window.setInterval(() => {
+        if (typeof document !== "undefined" && document.hidden) return;
+        void refresh();
+      }, POLL_MS_VISIBLE);
+    };
+    const stopPoll = () => {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) stopPoll();
+      else {
+        void refresh();
+        startPoll();
+      }
+    };
+    const onBalancesEvent = () => void refresh();
+
+    if (account?.address) startPoll();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("shelby:balances", onBalancesEvent);
+
+    return () => {
+      cancelledRef.current = true;
+      stopPoll();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("shelby:balances", onBalancesEvent);
+    };
+  }, [refresh, account?.address]);
+
+  return { apt, susd, loading, refresh };
 }
 
-export function recordRead(level: number, source: "shelby" | "cache" | "generated"): void {
-  if (typeof window === "undefined") return;
-  const raw = window.localStorage.getItem("shelby-sudoku-read-count");
-  const next = (Number(raw) || 0) + 1;
-  window.localStorage.setItem("shelby-sudoku-read-count", String(next));
-  const logRaw = window.localStorage.getItem("shelby-sudoku-read-log");
-  const log = logRaw ? (JSON.parse(logRaw) as Array<{ ts: number; level: number; source: string }>) : [];
-  log.push({ ts: Date.now(), level, source });
-  if (log.length > 200) log.splice(0, log.length - 200);
-  window.localStorage.setItem("shelby-sudoku-read-log", JSON.stringify(log));
-}
+export type UseBalances = ReturnType<typeof useBalances>;
