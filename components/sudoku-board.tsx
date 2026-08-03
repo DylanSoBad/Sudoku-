@@ -93,7 +93,14 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
       const k = e.key;
       if (k >= "1" && k <= "9") {
         const d = Number(k);
-        if (isGiven[cursor]) return;
+        if (isGiven[cursor]) {
+          // Jump to first empty cell so user isn't stuck on a given
+          const first = findEmpty(ref0.current);
+          if (first >= 0) {
+            setCursor(first);
+          }
+          return;
+        }
         const next = [...ref0.current];
         next[cursor] = d;
         commit(next);
@@ -101,7 +108,11 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
         return;
       }
       if (k === "Backspace" || k === "Delete" || k === "0") {
-        if (isGiven[cursor]) return;
+        if (isGiven[cursor]) {
+          const first = findEmpty(ref0.current);
+          if (first >= 0) setCursor(first);
+          return;
+        }
         const next = [...ref0.current];
         next[cursor] = 0;
         commit(next);
