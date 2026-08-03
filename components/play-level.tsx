@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { RewardModal } from "./RewardModal";
 import { fetchPuzzle, type FetchedPuzzle } from "@/lib/fetcher";
 import { recordRead } from "./ReadLedger";
-import { findEmpty, isSolved } from "@/lib/sudoku";
+import { findEmpty, isSolved as checkSolved } from "@/lib/sudoku";
 import { creditShelbyUSD, debitShelbyUSD } from "@/lib/balances";
 import { loadPrefs, effectiveHintCost } from "@/lib/preferences";
 import { economicsForLevel, DAILY_BONUS_MULT } from "@/lib/tokenomics";
 import { markCleared } from "@/lib/progress";
 import { recordRun } from "@/lib/leaderboard";
 import { bumpStreak } from "@/lib/streak";
+import { MAX_LEVEL } from "@/lib/tokenomics";
 
 function fmt(ms: number): string {
   const total = Math.round(ms / 1000);
@@ -23,11 +24,15 @@ function fmt(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function PlayLevelPage() {
+export interface PlayLevelPageProps {
+  level?: number;
+}
+
+export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const params = useParams<{ level?: string; n?: string }>();
   const router = useRouter();
   const { account } = useWallet();
-  const raw = params?.level ?? params?.n ?? "1";
+  const raw = levelProp !== undefined ? String(levelProp) : (params?.level ?? params?.n ?? "1");
   const level = Math.max(1, Number(raw) || 1);
 
   const [puzzle, setPuzzle] = useState<FetchedPuzzle | null>(null);
@@ -35,12 +40,17 @@ export function PlayLevelPage() {
   const [hintCount, setHintCount] = useState(0);
   const [rewardOpen, setRewardOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [isSolved, setIsSolved] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const boardRef = useRef<SudokuBoardHandle | null>(null);
+  const rewardFired = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
+    setRewardOpen(false);
+    setIsSolved(false);
+    rewardFired.current = false;
     fetchPuzzle(level)
       .then((p) => {
         if (cancelled) return;
@@ -62,6 +72,9 @@ export function PlayLevelPage() {
   }, [puzzle?.ts]);
 
   const onSolve = useCallback(() => {
+    if (rewardFired.current) return;
+    rewardFired.current = true;
+    setIsSolved(true);
     setRewardOpen(true);
     if (account?.address) {
       const econ = economicsForLevel(level);
@@ -89,6 +102,24 @@ export function PlayLevelPage() {
     setHintCount((n) => n + 1);
   };
 
+  const handleDigit = (d: number) => {
+    boardRef.current?.setDigit(d);
+  };
+
+  const handleClear = () => {
+    boardRef.current?.clear();
+  };
+
+  const handleNext = () => {
+    if (!isSolved) return;
+    const next = level + 1;
+    if (next <= MAX_LEVEL) {
+      router.push(`/level/${next}`);
+    } else {
+      router.push("/");
+    }
+  };
+
   const locked = useMemo(
     () => puzzle && puzzle.source !== "shelby",
     [puzzle],
@@ -98,7 +129,23 @@ export function PlayLevelPage() {
     <main className="mx-auto flex max-w-2xl flex-col gap-4 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Level {level}</h1>
-        <Button variant="ghost" onClick={() => router.push("/")}>Back</Button>
+        <div className="flex items-center gap-3">
+          {isSolved && level < MAX_LEVEL && (
+            <Button
+              variant="ghost"
+              onClick={handleNext}
+              className="text-sm text-shelby-accent2 hover:text-shelby-accent2"
+            >
+              Next →
+            </Button>
+          )}
+          {isSolved && level === MAX_LEVEL && (
+            <Button variant="ghost" onClick={() => router.push("/")} className="text-sm">
+              All levels cleared ✓
+            </Button>
+          )}
+          <Button variant="ghost" onClick={() => router.push("/")}>Back</Button>
+        </div>
       </header>
       {error && (
         <div className="rounded-lg border border-shelby-danger/30 bg-shelby-danger/10 px-3 py-2 text-sm text-shelby-danger">
@@ -134,12 +181,31 @@ export function PlayLevelPage() {
             <Button variant="secondary" onClick={buyHint}>
               Buy hint ({economicsForLevel(level).hintCost.toFixed(2)} sUSD)
             </Button>
-            <Button variant="ghost" onClick={() => boardRef.current?.clear()}>Clear</Button>
+            <Button variant="ghost" onClick={handleClear}>Clear</Button>
             {locked && (
               <span className="text-xs text-shelby-muted">
                 Source: {puzzle.source}
               </span>
             )}
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => handleDigit(d)}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-shelby-border bg-shelby-surface text-lg font-semibold text-shelby-fg-strong hover:bg-shelby-bg"
+              >
+                {d}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={handleClear}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-shelby-border bg-shelby-surface text-lg font-semibold text-shelby-danger hover:bg-shelby-bg"
+            >
+              ⌫
+            </button>
           </div>
         </>
       ) : (
@@ -150,7 +216,6 @@ export function PlayLevelPage() {
           open={rewardOpen}
           onClose={() => {
             setRewardOpen(false);
-            router.push("/");
           }}
           level={level}
           ms={elapsedMs}

@@ -139,3 +139,48 @@ test("easy puzzle keeps givens on every row after removal (36 empties)", () => {
     }
   }
 });
+
+test("level 1 (36 empties): no row/col/box has 9 empties or 0 empties", () => {
+  // The bug report showed whole 3x3 boxes being cleared. This test
+  // ensures carveByShuffle distributes empties evenly across rows, columns,
+  // and 3x3 boxes so that no row/col/box is fully empty and none is full.
+  for (let s = 0; s < 50; s++) {
+    const seed = (s * 0x9e3779b1 + 0xdeadbeef) >>> 0;
+    const { puzzle } = generatePuzzleWithSeed(1, seed);
+
+    // Rows: no row fully empty, no row fully filled
+    for (let r = 0; r < 9; r++) {
+      let rowEmpty = 0;
+      for (let c = 0; c < 9; c++) {
+        if (puzzle[r * 9 + c] === 0) rowEmpty++;
+      }
+      assert.notEqual(rowEmpty, 9, `row ${r} has 9 empties for seed ${seed}`);
+      assert.notEqual(rowEmpty, 0, `row ${r} has 0 empties for seed ${seed}`);
+    }
+
+    // Columns: no column fully empty, no column fully filled
+    for (let c = 0; c < 9; c++) {
+      let colEmpty = 0;
+      for (let r = 0; r < 9; r++) {
+        if (puzzle[r * 9 + c] === 0) colEmpty++;
+      }
+      assert.notEqual(colEmpty, 9, `col ${c} has 9 empties for seed ${seed}`);
+      assert.notEqual(colEmpty, 0, `col ${c} has 0 empties for seed ${seed}`);
+    }
+
+    // 3x3 boxes: no box fully empty, no box fully filled
+    for (let br = 0; br < 3; br++) {
+      for (let bc = 0; bc < 3; bc++) {
+        let boxEmpty = 0;
+        for (let dr = 0; dr < 3; dr++) {
+          for (let dc = 0; dc < 3; dc++) {
+            const idx = (br * 3 + dr) * 9 + (bc * 3 + dc);
+            if (puzzle[idx] === 0) boxEmpty++;
+          }
+        }
+        assert.notEqual(boxEmpty, 9, `box [${br},${bc}] has 9 empties for seed ${seed}`);
+        assert.notEqual(boxEmpty, 0, `box [${br},${bc}] has 0 empties for seed ${seed}`);
+      }
+    }
+  }
+});

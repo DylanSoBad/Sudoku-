@@ -25,6 +25,7 @@ export interface SudokuBoardHandle {
   clear: () => void;
   fillHint: (idx: number, digit: number) => void;
   getBoard: () => Board;
+  setCursor: (i: number) => void;
 }
 
 export interface SudokuBoardStats {
@@ -83,6 +84,9 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
         setCursor(idx);
       },
       getBoard: () => [...ref0.current],
+      setCursor(i: number) {
+        setCursor(i);
+      },
     }),
     [cursor, isGiven, commit],
   );
@@ -91,10 +95,10 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
     function onKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement) return;
       const k = e.key;
+      if (cursor < 0) return;
       if (k >= "1" && k <= "9") {
         const d = Number(k);
         if (isGiven[cursor]) {
-          // Jump to first empty cell so user isn't stuck on a given
           const first = findEmpty(ref0.current);
           if (first >= 0) {
             setCursor(first);
@@ -130,10 +134,13 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
         setCursor(next);
         e.preventDefault();
       }
+      if (k === "Escape") {
+        setCursor(-1);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cursor, commit, isGiven]);
+  }, [cursor, commit, isGiven, puzzle]);
 
   function onCellClick(i: number) {
     setCursor(i);
@@ -149,7 +156,7 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
         {board.map((v, i) => {
           const r = rowOf(i);
           const c = colOf(i);
-          const isCursor = i === cursor;
+          const isCursor = cursor >= 0 && i === cursor;
           const isHighlight =
             highlight !== undefined &&
             (rowOf(highlight) === r ||

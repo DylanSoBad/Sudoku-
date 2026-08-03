@@ -264,8 +264,11 @@ export type PuzzleMetaWithHintPrice = PuzzleMeta;
 // cell indices with the deterministic RNG (FNV-1a + mulberry32) and
 // flipping them to EMPTY one by one until `empties` is reached.
 //
-// We never carve whole rows or columns: every cell is visited in a
-// permutation, which guarantees scattered givens on the finished puzzle.
+// The algorithm is CONSTRAINED: it stops removing from a row/col/box the
+// moment removing the next cell would leave that row/col/box with zero
+// empty cells. This guarantees every row, column, and 3x3 box has at
+// least one given cell — no completely filled or completely empty rows
+// / columns / 3x3 boxes appear in the puzzle.
 function carveByShuffle(
   puzzle: Board,
   empties: number,
@@ -274,19 +277,103 @@ function carveByShuffle(
   const target = Math.max(0, Math.min(81, empties));
   if (target === 0) return 0;
 
-  const indices = shuffle(
-    Array.from({ length: 81 }, (_, i) => i),
-    rng,
-  );
+  const rowGiven = new Array<number>(9).fill(9);
+  const colGiven = new Array<number>(9).fill(9);
+  const boxGiven = new Array<number>(9).fill(9);
+
+  function removeAt(pick: number): boolean {
+    if (puzzle[pick] === 0) return false;
+    const r = (pick / 9) | 0;
+    const c = pick % 9;
+    const b = (((r / 3) | 0) * 3) + (((c / 3) | 0));
+    if (rowGiven[r] <= 1 || colGiven[c] <= 1 || boxGiven[b] <= 1) return false;
+    puzzle[pick] = 0;
+    rowGiven[r]--;
+    colGiven[c]--;
+    boxGiven[b]--;
+    return true;
+  }
 
   let removed = 0;
-  for (const i of indices) {
-    if (removed >= target) break;
-    if (puzzle[i] !== 0) {
-      puzzle[i] = 0;
-      removed++;
-    }
+
+  // Phase 1: ensure EVERY row, column, and 3x3 box has ≥1 empty by
+  // repeatedly scanning for deficient groups (zero empties) and
+  // removing a safe cell that touches them.
+  function rowEmpty(r: number): number {
+    let n = 0;
+    for (let c = 0; c < 9; c++) if (puzzle[r * 9 + c] === 0) n++;
+    return n;
   }
+  function colEmpty(c: number): number {
+    let n = 0;
+    for (let r = 0; r < 9; r++) if (puzzle[r * 9 + c] === 0) n++;
+    return n;
+  }
+  function boxEmpty(b: number): number {
+    let n = 0;
+    const br = (b / 3) | 0;
+    const bc = b % 3;
+    for (let dr = 0; dr < 3; dr++)
+      for (let dc = 0; dc < 3; dc++)
+        if (puzzle[(br * 3 + dr) * 9 + (bc * 3 + dc)] === 0) n++;
+    return n;
+  }
+
+  let safety = 0;
+  while (safety++ < 100) {
+    const deficientRows: number[] = [];
+    const deficientCols: number[] = [];
+    const deficientBoxes: number[] = [];
+    for (let i = 0; i < 9; i++) {
+      if (rowEmpty(i) === 0) deficientRows.push(i);
+      if (colEmpty(i) === 0) deficientCols.push(i);
+      if (boxEmpty(i) === 0) deficientBoxes.push(i);
+    }
+    if (deficientRows.length === 0 && deficientCols.length === 0 && deficientBoxes.length === 0) break;
+    let progressed = false;
+    const order = shuffle(Array.from({ length: 81 }, (_, i) => i), rng);
+    for (const i of order) {
+      const r = (i / 9) | 0;
+      const c = i % 9;
+      const b = (((r / 3) | 0) * 3) + (((c / 3) | 0));
+      const touches =
+        deficientRows.includes(r) ||
+        deficientCols.includes(c) ||
+        deficientBoxes.includes(b);
+      if (!touches) continue;
+      if (removeAt(i)) {
+        progressed = true;
+        removed++;
+        break;
+      }
+    }
+    if (!progressed) break;
+    if (removed >= target) break;
+  }
+
+  // Phase 2: random fill to reach target.
+  let order = shuffle(
+    Array.from({ length: 81 }, (_, i) => i).filter((i) => puzzle[i] !== 0),
+    rng,
+  );
+  let guard = 0;
+  while (removed < target && guard < 200) {
+    guard++;
+    let progressed = false;
+    const survivors: number[] = [];
+    for (const i of order) {
+      if (removed >= target) break;
+      if (removeAt(i)) {
+        progressed = true;
+        removed++;
+      } else {
+        survivors.push(i);
+      }
+    }
+    if (!progressed) break;
+    order = shuffle(survivors, rng);
+  }
+
   return removed;
 }
 
@@ -299,7 +386,7 @@ export function generatePuzzle(level: number, a: number, b?: number): GeneratedP
     const meta = getLevelMeta(level);
     const sol = generateFullSolution(seed);
     const puzzle = sol.slice();
-    const rng = mulberry32(seed ^ 0x9e3779b9);
+    const rng = mulberry32(fnv1a(`${level}|${seed}`));
     const removed = carveByShuffle(puzzle, empties, rng);
     return { puzzle, solution: sol, meta: { ...meta, empties: removed } };
   }
@@ -327,7 +414,10 @@ export function generatePuzzleWithSeed(level: number, seed: number): GeneratedPu
   const meta = getLevelMeta(level);
   const sol = generateFullSolution(seed);
   const puzzle = sol.slice();
-  const rng = mulberry32(seed ^ 0x517cc1b7);
+  // Seed carving RNG deterministically via FNV-1a over level|salt so
+  // empty distribution is reproducible and spread across all 9 rows,
+  // 9 columns, and 9 3x3 boxes.
+  const rng = mulberry32(fnv1a(`${level}|${seed}`));
   const removed = carveByShuffle(puzzle, meta.empties, rng);
   return { puzzle, solution: sol, meta: { ...meta, empties: removed } };
 }
