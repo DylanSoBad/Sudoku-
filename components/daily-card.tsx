@@ -35,7 +35,7 @@ export function DailyCard() {
               <Check className="h-3 w-3" /> Done
             </Badge>
           ) : (
-            <Badge variant="accent">2× reward</Badge>
+            <Badge variant="accent">2x reward</Badge>
           )}
         </div>
         <CardDescription>

@@ -83,7 +83,7 @@ export function LeaderboardPanel() {
                     {short(e.addr)}
                   </span>
                   {e.source === "local" ? (
-                    <Badge variant="muted" className="text-[10px]">
+                    <Badge variant="muted" className="text-[11px]">
                       local
                     </Badge>
                   ) : null}

@@ -197,7 +197,7 @@ export function HintShop({
         title={t.hintShop.feeSplitTip}
       >
         {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-4 w-4" />
         ) : (
           <Lightbulb className="h-4 w-4" />
         )}

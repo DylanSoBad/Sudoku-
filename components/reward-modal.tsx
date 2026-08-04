@@ -198,7 +198,7 @@ export function RewardModal({
         </div>
         <p className="text-sm text-shelby-muted">
           {claimed ? t.reward.claimed : t.reward.available}
-          {isDaily ? " · 2× daily bonus" : ""}
+          {isDaily ? " · 2x daily bonus" : ""}
         </p>
         <p className="text-3xl font-bold text-shelby-gold">
           +{reward}{" "}
@@ -211,7 +211,7 @@ export function RewardModal({
             disabled={loading || claimed}
             aria-label="Claim reward"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {loading ? <Loader2 className="h-4 w-4" /> : null}
             {claimed ? t.reward.claimed.split("—")[0]?.trim() || "Claimed" : t.reward.claim}
           </Button>
           {replayHref ? (

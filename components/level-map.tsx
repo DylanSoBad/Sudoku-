@@ -198,7 +198,7 @@ export function LevelMap() {
                   isUnlocked &&
                     !isDone &&
                     "border-shelby-accent bg-shelby-bg hover:border-shelby-accent",
-                  isCurrent && !isDone && "animate-pulse",
+                  isCurrent && !isDone && "border-line-strong",
                   isDone &&
                     "border-shelby-gold/60 bg-shelby-gold/10 hover:border-shelby-gold",
                 )}
@@ -222,7 +222,7 @@ export function LevelMap() {
 
                 <Badge
                   variant={isUnlocked ? diffColor[meta.difficulty] : "muted"}
-                  className="mt-0.5 px-1.5 py-0 text-[10px] font-medium leading-tight tracking-wide"
+                  className="mt-0.5 px-1.5 py-0 text-[11px] font-medium leading-tight tracking-wide"
                 >
                   <span className="sm:hidden">{short}</span>
                   <span className="hidden capitalize sm:inline">{full}</span>

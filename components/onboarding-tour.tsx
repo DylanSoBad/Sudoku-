@@ -78,7 +78,7 @@ export function OnboardingTour() {
       <div className="absolute inset-0 bg-black/65" onClick={finish} />
       {spotlight ? (
         <div
-          className="pointer-events-none absolute rounded-xl ring-2 ring-shelby-accent shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]"
+          className="pointer-events-none absolute rounded-md ring-2 ring-accent"
           style={{
             top: spotlight.top,
             left: spotlight.left,
@@ -88,14 +88,14 @@ export function OnboardingTour() {
         />
       ) : null}
       <div
-        className="absolute z-10 w-[min(320px,calc(100vw-32px))] rounded-xl border border-shelby-border bg-shelby-panel p-4 shadow-2xl"
+        className="absolute z-10 w-[min(320px,calc(100vw-32px))] rounded-xl border border-line bg-surface p-4"
         style={{ top: tipTop, left: tipLeft }}
       >
-        <p className="text-xs uppercase tracking-wider text-shelby-accent">
+        <p className="font-mono text-xs text-content-subtle">
           {step + 1} / {STEPS.length}
         </p>
-        <h3 className="mt-1 text-lg font-semibold text-white">{titles[step]}</h3>
-        <p className="mt-2 text-sm text-shelby-muted">{bodies[step]}</p>
+        <h3 className="mt-1 text-lg font-semibold text-content">{titles[step]}</h3>
+        <p className="mt-2 text-sm text-content-muted">{bodies[step]}</p>
         <div className="mt-4 flex justify-between gap-2">
           <Button variant="ghost" size="sm" onClick={finish}>
             {t.onboarding.skip}

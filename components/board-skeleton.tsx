@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-/** 9×9 shimmer skeleton shown while fetching a puzzle blob. */
+/** 9x9 skeleton shown while fetching a puzzle blob. */
 export function BoardSkeleton({ className }: { className?: string }) {
   return (
     <div
@@ -18,7 +18,7 @@ export function BoardSkeleton({ className }: { className?: string }) {
             <div
               key={i}
               className={cn(
-                "sudoku-cell animate-pulse bg-shelby-panel/80",
+                "sudoku-cell bg-shelby-panel/80",
                 thickRight && "border-r-2 border-r-shelby-border",
                 thickBottom && "border-b-2 border-b-shelby-border",
               )}

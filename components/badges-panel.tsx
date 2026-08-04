@@ -58,7 +58,7 @@ export function BadgesPanel() {
                       {def.name}
                     </p>
                     <p className="text-xs text-shelby-muted">{def.description}</p>
-                    <p className="mt-0.5 font-mono text-[10px] text-shelby-muted/80">
+                    <p className="mt-0.5 font-mono text-[11px] text-shelby-muted/80">
                       {def.metadataBlobHint}
                       {rec?.blobName ? ` · ${rec.blobName}` : ""}
                     </p>

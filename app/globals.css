@@ -2,9 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
-html, body { background: theme("colors.shelby.bg"); color: theme("colors.shelby.fg-strong"); min-height: 100%; }
-body { font-family: theme("fontFamily.sans"); -webkit-font-smoothing: antialiased; }
-a { text-decoration: none; color: inherit; }
-button { font: inherit; }
-::selection { background: theme("colors.shelby.accent"); color: white; }
+:root {
+  color-scheme: dark;
+
+  --bg: #0a0a0b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --text-subtle: #52525b;
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --success: #10b981;
+  --danger: #ef4444;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
+
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -13,25 +13,25 @@ export async function GET(req: Request) {
           flexDirection: "column",
           width: "100%",
           height: "100%",
-          background: "linear-gradient(135deg,#0b0d12 0%,#1b1230 100%)",
-          color: "white",
+          background: "#0a0a0b",
+          color: "#fafafa",
           padding: 64,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div
             style={{
-              width: 56,
+              width: 12,
               height: 56,
-              borderRadius: 14,
-              background: "linear-gradient(135deg,#7b5cff,#22d3ee)",
+              borderRadius: 4,
+              background: "#8b5cf6",
             }}
           />
-          <div style={{ fontSize: 32, fontWeight: 700 }}>Sudoku on Shelby</div>
+          <div style={{ fontSize: 32, fontWeight: 600 }}>Sudoku on Shelby</div>
         </div>
-        <div style={{ marginTop: 64, fontSize: 96, fontWeight: 800 }}>Level {level}</div>
-        <div style={{ marginTop: 24, fontSize: 28, color: "#c7d2fe" }}>
-          Puzzle blob stored on Aptos × Shelby Protocol
+        <div style={{ marginTop: 64, fontSize: 96, fontWeight: 600 }}>Level {level}</div>
+        <div style={{ marginTop: 24, fontSize: 28, color: "#a1a1aa" }}>
+          Puzzle blob stored on Aptos and Shelby Protocol
         </div>
       </div>
     ),

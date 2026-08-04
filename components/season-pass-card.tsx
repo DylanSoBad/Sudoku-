@@ -88,7 +88,7 @@ export function SeasonPassCard() {
           </p>
         ) : (
           <Button onClick={() => void buy()} disabled={loading} className="w-full">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {loading ? <Loader2 className="h-4 w-4" /> : null}
             {t.seasonPass.buy} ({SEASON_PASS.priceShelbyUsd} sUSD)
           </Button>
         )}

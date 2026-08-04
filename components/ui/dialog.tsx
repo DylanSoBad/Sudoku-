@@ -37,12 +37,12 @@ export function Dialog({ open, onClose, onOpenChange, title, description: _descr
     >
       <div
         className={cn(
-          "w-full max-w-md rounded-2xl border border-shelby-border bg-shelby-surface p-6 shadow-glow",
+          "w-full max-w-[400px] rounded-xl border border-line bg-surface p-6",
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <h2 id="dialog-title" className="mb-3 text-lg font-semibold">
+          <h2 id="dialog-title" className="mb-3 text-lg font-semibold text-content">
             {title}
           </h2>
         )}

@@ -5,7 +5,7 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { explorerTxUrl, formatMs } from "@/lib/utils";
-import { rewardFor, MAX_LEVEL } from "@/lib/tokenomics";
+import { REWARD_PER_LEVEL_SUSD, MAX_LEVEL } from "@/lib/tokenomics";
 import { markCleared } from "@/lib/progress";
 import { useRouter } from "next/navigation";
 import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
@@ -20,20 +20,39 @@ export interface RewardModalProps {
   txHash?: string;
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function shortHash(hash: string): string {
+  return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
+}
+
 export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardModalProps) {
   const router = useRouter();
   const { account, signAndSubmitTransaction } = useWallet();
   const [claiming, setClaiming] = useState(false);
-  const [claimed, setClaimed] = useState(false);
+  const [claimed, setClaimed] = useState(Boolean(txHash));
   const [claimTxHash, setClaimTxHash] = useState<string | undefined>(txHash);
   const [claimError, setClaimError] = useState<string | undefined>(undefined);
 
-  const reward = rewardFor(level);
   const registry = registryAddress();
   const isLastLevel = level >= MAX_LEVEL;
 
-  async function handleClaim() {
-    if (!account) return;
+  function goNext() {
+    onClose();
+    router.push(isLastLevel ? "/" : `/play/${level + 1}`);
+  }
+
+  async function handleClaimAndNext() {
+    if (claimed) {
+      goNext();
+      return;
+    }
+    if (!account) {
+      setClaimError("Connect a wallet to claim");
+      return;
+    }
     if (!registry) {
       setClaimError("NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is not set");
       return;
@@ -55,6 +74,7 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
       // Persist HMAC progress unlocking level N+1 only after success.
       await markCleared(account.address, level);
       window.dispatchEvent(new CustomEvent("shelby:balances"));
+      goNext();
     } catch (e) {
       setClaimError((e as Error).message ?? "Transaction failed");
     } finally {
@@ -62,79 +82,47 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
     }
   }
 
-  async function handleNextLevel() {
-    if (account?.address) {
-      await markCleared(account.address, level);
-    }
-    onClose();
-    if (isLastLevel) {
-      router.push("/");
-    } else {
-      router.push(`/level/${level + 1}`);
-    }
-  }
-
   return (
-    <Dialog open={open} onClose={onClose} title={`Level ${level} complete`}>
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-shelby-muted">
-          Time {formatMs(ms)} · {hints} hint{hints === 1 ? "" : "s"}
+    <Dialog open={open} onClose={onClose} title={`Level ${pad2(level)} solved`}>
+      <div className="flex flex-col gap-5">
+        <p className="-mt-2 font-mono text-xs text-content-muted">
+          {formatMs(ms)} · {hints} hint{hints === 1 ? "" : "s"}
         </p>
 
-        <div className="rounded-lg border border-shelby-accent/30 bg-shelby-accent/10 p-3 text-center">
-          <div className="text-3xl font-bold text-shelby-accent2">+{reward.toFixed(2)} sUSD</div>
-          <div className="mt-1 text-xs text-shelby-muted">
-            {claimTxHash
-              ? "Claimed on-chain"
-              : claimed
-                ? "Claimed on-chain"
-                : registry
-                  ? "Ready to claim on-chain"
-                  : "Move registry not configured"}
-          </div>
+        <div className="font-mono text-3xl text-accent-hover">
+          +{REWARD_PER_LEVEL_SUSD.toFixed(3)} sUSD
         </div>
 
         {claimError && (
-          <div className="rounded border border-shelby-danger/30 bg-shelby-danger/10 px-3 py-2 text-xs text-shelby-danger">
-            {claimError}
-          </div>
+          <p className="text-xs text-danger">{claimError}</p>
         )}
 
-        {registry && account && !claimed ? (
-          <Button onClick={handleClaim} disabled={claiming} className="w-full">
-            {claiming ? "Claiming…" : "Claim reward on-chain"}
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            className="flex-1"
+            onClick={() => {
+              onClose();
+              router.push("/");
+            }}
+          >
+            Back
           </Button>
-        ) : !claimed ? (
-          <Button disabled className="w-full opacity-60">
-            {registry && !account ? "Connect wallet to claim" : "Move registry not configured"}
+          <Button className="flex-1" onClick={handleClaimAndNext} disabled={claiming}>
+            {claiming ? "Claiming" : claimed ? "Next" : "Claim + Next"}
           </Button>
-        ) : null}
-
-        {claimed && (
-          <Button disabled className="w-full opacity-60">
-            Reward credited ✓
-          </Button>
-        )}
+        </div>
 
         {claimTxHash && (
           <a
-            className="text-center text-xs text-shelby-accent2 underline"
+            className="font-mono text-xs text-content-subtle transition-colors duration-100 hover:text-content-muted"
             href={explorerTxUrl(claimTxHash)}
             target="_blank"
             rel="noreferrer"
           >
-            view tx on explorer
+            tx: {shortHash(claimTxHash)}
           </a>
         )}
-
-        <div className="flex gap-2">
-          <Button variant="ghost" onClick={() => { onClose(); router.push("/"); }} className="flex-1">
-            Back to levels
-          </Button>
-          <Button onClick={handleNextLevel} className="flex-1">
-            {isLastLevel ? "All done!" : "Next level →"}
-          </Button>
-        </div>
       </div>
     </Dialog>
   );

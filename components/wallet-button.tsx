@@ -91,7 +91,7 @@ export function WalletButton() {
         </Button>
       </div>
       {open ? (
-        <div className="absolute right-0 z-40 mt-2 min-w-[220px] rounded-lg border border-shelby-border bg-shelby-panel p-2 shadow-xl">
+        <div className="absolute right-0 z-40 mt-2 min-w-[220px] rounded-lg border border-shelby-border bg-shelby-panel p-2">
           {(wallets ?? []).length === 0 ? (
             <div className="space-y-2 px-2 py-3 text-xs text-shelby-muted">
               <p>{t.wallet.noWallets}</p>
@@ -109,7 +109,7 @@ export function WalletButton() {
                 rel="noreferrer"
                 className="block text-shelby-accent hover:underline"
               >
-                Get Pontem →
+                Get Pontem
               </a>
               <a
                 href="https://nightly.app/download"
@@ -117,7 +117,7 @@ export function WalletButton() {
                 rel="noreferrer"
                 className="block text-shelby-accent hover:underline"
               >
-                Get Nightly →
+                Get Nightly
               </a>
             </div>
           ) : (

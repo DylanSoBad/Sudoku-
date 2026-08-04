@@ -1,18 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWallet, type InputTransactionData } from "@aptos-labs/wallet-adapter-react";
-import { Lightbulb, Loader2, ExternalLink } from "lucide-react";
+import { Lightbulb, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { waitForTxSuccess, registryAddress } from "@/lib/aptos";
-import { getLevelMeta, pickHintCell, type Board } from "@/lib/sudoku";
+import { pickHintCell, type Board } from "@/lib/sudoku";
+import { consumeFreeHint, effectiveStreak, getHintPricing } from "@/lib/streak";
 import {
-  consumeFreeHint,
-  effectiveStreak,
-  getHintPricing,
-} from "@/lib/streak";
-import { seasonPassHintMultiplier } from "@/lib/season-pass";
+  HINT_COST_LABEL,
+  HINT_COST_SUSD,
+  MAX_HINTS_PER_LEVEL,
+} from "@/lib/tokenomics";
+import {
+  bumpLocalHintsUsed,
+  fetchOnChainHintsUsed,
+  getLocalHintsUsed,
+  hintLimitReached,
+} from "@/lib/hints";
 import { RevenueSplitBar } from "@/components/revenue-split";
 import { useT } from "@/components/app-providers";
 
@@ -33,8 +39,6 @@ interface BuyHintResult {
   appliedHint: { index: number; value: number };
 }
 
-const CONFLICT_PRICE = 0.02;
-
 export function HintShop({
   level,
   sessionId,
@@ -45,49 +49,49 @@ export function HintShop({
   onFlashConflicts,
 }: HintShopProps) {
   const t = useT();
-  const { connected, signAndSubmitTransaction } = useWallet();
+  const { account, connected, signAndSubmitTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [kind, setKind] = useState<HintKind>("cell");
   const [streak, setStreak] = useState(0);
-  const [passMult, setPassMult] = useState(1);
-  const meta = getLevelMeta(level);
-
-  const localMode = (process.env.NEXT_PUBLIC_LOCAL_MODE ?? "false").toLowerCase() === "true";
+  const [hintsUsed, setHintsUsed] = useState(0);
 
   useEffect(() => {
     setStreak(effectiveStreak());
-    setPassMult(seasonPassHintMultiplier());
     const onStreak = () => setStreak(effectiveStreak());
-    const onPass = () => setPassMult(seasonPassHintMultiplier());
     window.addEventListener("shelby:streak", onStreak);
-    window.addEventListener("shelby:season-pass", onPass);
-    return () => {
-      window.removeEventListener("shelby:streak", onStreak);
-      window.removeEventListener("shelby:season-pass", onPass);
-    };
+    return () => window.removeEventListener("shelby:streak", onStreak);
   }, []);
 
-  const pricing = useMemo(() => {
-    const basePrice = meta.hintPrice ?? meta.hintCost ?? 0;
-    if (kind === "conflicts") {
-      const free = getHintPricing(basePrice).freeHintAvailable;
-      const price = free ? 0 : CONFLICT_PRICE * passMult;
-      return {
-        price,
-        priceMicro: free ? 0 : Math.round(price * 1_000_000),
-        freeHintAvailable: free,
-        discount: 1,
-      };
+  // Pricing is flat on-chain, so the only remaining modifier is the streak's
+  // free hint, which skips the transaction entirely.
+  const freeHintAvailable = useMemo(
+    () => getHintPricing(HINT_COST_SUSD).freeHintAvailable,
+    // `streak` is not read directly but a change to it can flip availability.
+    [streak],
+  );
+
+  const refreshHints = useCallback(async () => {
+    const addr = account?.address;
+    if (!addr) {
+      setHintsUsed(0);
+      return;
     }
-    const base = kind === "rowcol" ? basePrice * 2 : basePrice;
-    const priced = getHintPricing(base);
-    const price = priced.freeHintAvailable ? 0 : priced.price * passMult;
-    return {
-      ...priced,
-      price,
-      priceMicro: priced.freeHintAvailable ? 0 : Math.round(price * 1_000_000),
-    };
-  }, [kind, meta.hintPrice, meta.hintCost, passMult]);
+    const registry = registryAddress();
+    if (registry) {
+      const onChain = await fetchOnChainHintsUsed(registry, addr, level);
+      if (onChain !== null) {
+        setHintsUsed(onChain);
+        return;
+      }
+    }
+    setHintsUsed(getLocalHintsUsed(addr, level));
+  }, [account?.address, level]);
+
+  useEffect(() => {
+    void refreshHints();
+  }, [refreshHints]);
+
+  const atLimit = hintLimitReached(hintsUsed);
 
   async function buyHintOnChain(): Promise<BuyHintResult | null> {
     if (!connected) {
@@ -136,19 +140,18 @@ export function HintShop({
       toast.error(t.hintShop.connectWallet);
       return;
     }
+    if (atLimit) {
+      toast.error(`Max ${MAX_HINTS_PER_LEVEL} hints per level`);
+      return;
+    }
 
     setLoading(true);
     try {
-      const useFree = pricing.freeHintAvailable;
-      const skipChain = useFree || pricing.priceMicro === 0;
+      const useFree = freeHintAvailable;
 
-      if (skipChain) {
-        if (useFree) {
-          consumeFreeHint();
-          toast.success("Free streak hint used");
-        } else {
-          toast.message("Free conflict hint used");
-        }
+      if (useFree) {
+        consumeFreeHint();
+        toast.success("Free streak hint used");
         if (kind === "cell") {
           await buyHintLocal();
         } else if (kind === "rowcol") {
@@ -156,6 +159,9 @@ export function HintShop({
         } else {
           onFlashConflicts?.();
           toast.message("Conflicts highlighted (2.5s)");
+        }
+        if (account?.address) {
+          setHintsUsed(bumpLocalHintsUsed(account.address, level));
         }
         return;
       }
@@ -194,6 +200,7 @@ export function HintShop({
           });
         }
       }
+      await refreshHints();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Hint purchase failed";
       toast.error(msg);
@@ -202,8 +209,7 @@ export function HintShop({
     }
   }
 
-  const priceLabel =
-    pricing.price === 0 ? "FREE" : `${pricing.price} shelbyUSD`;
+  const priceLabel = freeHintAvailable ? "FREE" : HINT_COST_LABEL;
 
   return (
     <div className="flex w-full max-w-md flex-col items-center gap-3">
@@ -212,12 +218,6 @@ export function HintShop({
           Streak {streak}d
           {streak >= 3 ? " · 30% hint discount" : ""}
           {streak >= 5 ? " · 1 free hint/day" : ""}
-        </p>
-      ) : null}
-
-      {localMode ? (
-        <p className="text-center text-xs text-shelby-warn">
-          Local mode (LOCAL_MODE=true). Set NEXT_PUBLIC_LOCAL_MODE=false for on-chain.
         </p>
       ) : null}
 
@@ -248,17 +248,20 @@ export function HintShop({
       <Button
         variant="primary"
         onClick={() => void buyHint()}
-        disabled={loading}
+        disabled={loading || atLimit}
         aria-label={`Buy ${kind} hint for ${priceLabel}`}
         title={t.hintShop.feeSplitTip}
       >
         {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-4 w-4" />
         ) : (
           <Lightbulb className="h-4 w-4" />
         )}
-        {t.hintShop.buyHint} ({priceLabel})
+        Buy Hint ({priceLabel})
       </Button>
+      <p className="text-center text-xs text-shelby-muted">
+        Hints used: {hintsUsed} / {MAX_HINTS_PER_LEVEL}
+      </p>
       <div className="w-full max-w-xs" title={t.hintShop.feeSplitTip}>
         <RevenueSplitBar compact />
       </div>

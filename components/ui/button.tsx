@@ -14,23 +14,23 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const base =
-  "inline-flex items-center justify-center rounded-lg font-medium transition-colors " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-shelby-accent " +
-  "focus-visible:ring-offset-2 focus-visible:ring-offset-shelby-bg " +
-  "disabled:opacity-50 disabled:cursor-not-allowed";
+  "inline-flex items-center justify-center gap-2 rounded-md font-medium " +
+  "transition-colors duration-100 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent " +
+  "focus-visible:ring-offset-2 focus-visible:ring-offset-bg " +
+  "disabled:cursor-not-allowed disabled:opacity-40";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-shelby-accent text-white hover:bg-shelby-accent/90 shadow-glow",
-  secondary:
-    "bg-shelby-surface text-shelby-fg-strong border border-shelby-border hover:bg-shelby-surface/80",
-  ghost: "bg-transparent text-shelby-fg-strong hover:bg-shelby-surface",
-  danger: "bg-shelby-danger text-white hover:bg-shelby-danger/90",
+  primary: "bg-accent text-white hover:bg-accent-hover",
+  secondary: "border border-line bg-surface-2 text-content hover:border-line-strong",
+  ghost: "border border-transparent text-content-muted hover:border-line hover:text-content",
+  danger: "bg-danger text-white hover:opacity-90",
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-sm",
-  md: "h-10 px-4 text-sm",
-  lg: "h-12 px-6 text-base",
+  sm: "h-8 px-3 text-xs",
+  md: "h-9 px-4 text-sm",
+  lg: "h-10 px-5 text-sm",
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(

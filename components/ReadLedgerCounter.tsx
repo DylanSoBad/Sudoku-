@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen } from "lucide-react";
 import { getReadLedger } from "@/lib/shelby";
 
 /**
  * Compact counter for the global header — mirrors the data source of the
- * full <ReadLedger /> card but renders as a single pill instead of a Card.
+ * full <ReadLedger /> card but renders as a single chip instead of a Card.
  */
 export function ReadLedgerCounter() {
   const [count, setCount] = useState(0);
@@ -20,12 +19,11 @@ export function ReadLedgerCounter() {
 
   return (
     <span
-      title="Successful puzzle-fetch counter"
-      className="inline-flex items-center gap-1.5 rounded-lg border border-shelby-border bg-shelby-surface px-2.5 py-1.5 text-xs text-shelby-fg-strong"
+      title="Successful puzzle fetches"
+      className="hidden items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1 text-xs sm:inline-flex"
     >
-      <BookOpen className="h-3.5 w-3.5 text-shelby-accent2" />
-      <span className="font-mono">{count}</span>
-      <span className="text-shelby-muted">reads</span>
+      <span className="font-mono text-content">{count}</span>
+      <span className="text-content-muted">reads</span>
     </span>
   );
 }

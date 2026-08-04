@@ -146,52 +146,52 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
     setCursor(i);
   }
 
+  const anchor = highlight ?? (cursor >= 0 ? cursor : undefined);
+  const anchorDigit = anchor === undefined ? 0 : board[anchor];
+
   return (
     <div
       role="grid"
       aria-label="Sudoku board"
-      className="relative w-full max-w-md select-none overflow-hidden rounded-lg border-2 border-white/40 bg-shelby-border"
+      className="inline-grid select-none grid-cols-9 border-2 border-zinc-700"
     >
-      <div className="grid w-full grid-cols-9 bg-shelby-border">
-        {board.map((v, i) => {
-          const r = rowOf(i);
-          const c = colOf(i);
-          const isCursor = cursor >= 0 && i === cursor;
-          const isHighlight =
-            highlight !== undefined &&
-            (rowOf(highlight) === r ||
-              colOf(highlight) === c ||
-              (Math.floor(r / 3) === Math.floor(rowOf(highlight) / 3) &&
-                Math.floor(c / 3) === Math.floor(colOf(highlight) / 3)));
-          const rightBoxEdge = c === 2 || c === 5;
-          const bottomBoxEdge = r === 2 || r === 5;
-          const outerRight = c === 8;
-          const outerBottom = r === 8;
-          return (
-            <button
-              key={i}
-              type="button"
-              role="gridcell"
-              onClick={() => onCellClick(i)}
-              aria-label={`row ${r + 1} column ${c + 1} value ${v || "empty"}`}
-              className={cn(
-                "flex aspect-square items-center justify-center bg-shelby-bg text-base font-semibold",
-                "border-white/10",
-                rightBoxEdge ? "border-r-2 border-r-white/40" : "border-r",
-                bottomBoxEdge ? "border-b-2 border-b-white/40" : "border-b",
-                outerRight && "border-r-0",
-                outerBottom && "border-b-0",
-                isGiven[i] ? "text-shelby-fg-strong" : "text-shelby-accent2",
-                conflictMask[i] && "text-shelby-danger",
-                isCursor && "ring-2 ring-shelby-accent",
-                isHighlight && !isCursor && "bg-shelby-surface",
-              )}
-            >
-              {v === 0 ? "" : v}
-            </button>
-          );
-        })}
-      </div>
+      {board.map((v, i) => {
+        const r = rowOf(i);
+        const c = colOf(i);
+        const isCursor = cursor >= 0 && i === cursor;
+        const isPeer =
+          anchor !== undefined &&
+          anchor !== i &&
+          (rowOf(anchor) === r ||
+            colOf(anchor) === c ||
+            (Math.floor(r / 3) === Math.floor(rowOf(anchor) / 3) &&
+              Math.floor(c / 3) === Math.floor(colOf(anchor) / 3)));
+        const isSameDigit = anchorDigit !== 0 && v === anchorDigit && !isCursor;
+        return (
+          <button
+            key={i}
+            type="button"
+            role="gridcell"
+            onClick={() => onCellClick(i)}
+            aria-label={`row ${r + 1} column ${c + 1} value ${v || "empty"}`}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center border-b border-r border-zinc-800",
+              "bg-transparent font-mono text-lg outline-none transition-colors duration-100 sm:h-11 sm:w-11",
+              (c === 2 || c === 5) && "border-r-2 border-r-zinc-600",
+              (r === 2 || r === 5) && "border-b-2 border-b-zinc-600",
+              c === 8 && "border-r-0",
+              r === 8 && "border-b-0",
+              isPeer && "bg-zinc-800/40",
+              isSameDigit && "bg-zinc-800/70",
+              isGiven[i] ? "font-medium text-zinc-100" : "font-normal text-zinc-300",
+              conflictMask[i] && "text-danger",
+              isCursor && "relative z-10 ring-2 ring-inset ring-accent",
+            )}
+          >
+            {v === 0 ? "" : v}
+          </button>
+        );
+      })}
     </div>
   );
 });

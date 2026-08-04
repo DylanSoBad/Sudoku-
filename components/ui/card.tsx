@@ -8,10 +8,7 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
     return (
       <div
         ref={ref}
-        className={cn(
-          "rounded-xl border border-shelby-border bg-shelby-surface p-4 shadow-sm",
-          className,
-        )}
+        className={cn("rounded-lg border border-line bg-surface p-4", className)}
         {...rest}
       />
     );
@@ -23,7 +20,12 @@ export function CardHeader({ className, ...rest }: React.HTMLAttributes<HTMLDivE
 }
 
 export function CardTitle({ className, ...rest }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("text-sm font-semibold uppercase tracking-wider text-shelby-muted", className)} {...rest} />;
+  return (
+    <h3
+      className={cn("text-xs font-medium uppercase tracking-wide text-content-muted", className)}
+      {...rest}
+    />
+  );
 }
 
 export function CardBody({ className, ...rest }: React.HTMLAttributes<HTMLDivElement>) {

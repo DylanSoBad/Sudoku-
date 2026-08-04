@@ -6,13 +6,13 @@ import { cn } from "@/lib/utils";
 type BadgeTone = "default" | "accent" | "success" | "warn" | "danger" | "gold" | "muted";
 
 const tones: Record<BadgeTone, string> = {
-  default: "bg-shelby-bg text-shelby-muted border-shelby-border",
-  accent: "bg-shelby-accent/15 text-shelby-accent border-shelby-accent/30",
-  success: "bg-shelby-success/15 text-shelby-success border-shelby-success/30",
-  warn: "bg-shelby-warn/15 text-shelby-warn border-shelby-warn/30",
-  danger: "bg-shelby-danger/15 text-shelby-danger border-shelby-danger/30",
-  gold: "bg-amber-300/15 text-amber-200 border-amber-300/30",
-  muted: "bg-shelby-surface text-shelby-muted border-shelby-border",
+  default: "border-line bg-surface-2 text-content-muted",
+  accent: "border-accent/30 bg-accent/10 text-accent-hover",
+  success: "border-line bg-surface-2 text-success",
+  warn: "border-line bg-surface-2 text-content-muted",
+  danger: "border-line bg-surface-2 text-danger",
+  gold: "border-accent/30 bg-accent/10 text-accent-hover",
+  muted: "border-line bg-surface text-content-subtle",
 };
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -25,7 +25,7 @@ export function Badge({ className, tone, variant, ...rest }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider",
+        "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[11px] leading-none tracking-wide",
         tones[t],
         className,
       )}

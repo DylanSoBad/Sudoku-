@@ -132,7 +132,7 @@ export function FaucetPanel() {
             disabled={!connected || loadingApt}
             aria-label="Request APT from faucet"
           >
-            {loadingApt ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {loadingApt ? <Loader2 className="h-4 w-4" /> : null}
             Request
           </Button>
         </div>
@@ -167,7 +167,7 @@ export function FaucetPanel() {
             disabled={!connected || loadingUsd}
             aria-label="Request shelbyUSD from faucet"
           >
-            {loadingUsd ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {loadingUsd ? <Loader2 className="h-4 w-4" /> : null}
             Request
           </Button>
         </div>

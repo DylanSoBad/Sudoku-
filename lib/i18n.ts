@@ -147,7 +147,7 @@ const en: Dict = {
     connectWallet: "Connect a wallet to buy hints",
   },
   reward: {
-    title: "Puzzle Solved!",
+    title: "Puzzle solved",
     available: "Reward available",
     claimed: "Reward claimed — continue when ready",
     claim: "Claim",
@@ -256,7 +256,7 @@ const vi: Dict = {
     connectWallet: "Kết nối ví để mua gợi ý",
   },
   reward: {
-    title: "Đã giải xong!",
+    title: "Đã giải xong",
     available: "Có thưởng",
     claimed: "Đã nhận thưởng — tiếp tục khi sẵn sàng",
     claim: "Nhận",

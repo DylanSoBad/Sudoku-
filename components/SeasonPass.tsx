@@ -49,7 +49,7 @@ export function SeasonPass() {
       </p>
       <div className="rounded-lg border border-shelby-border bg-shelby-surface p-3 text-sm">
         <div className="flex items-center justify-between">
-          <span>Hint ×2 pricing · Season board skin</span>
+          <span>Hint 2x pricing · Season board skin</span>
           <Button size="sm" variant={active ? "secondary" : "primary"} onClick={buy}>
             {active ? "Active" : `Buy pass (${SEASON_PASS.price} sUSD)`}
           </Button>

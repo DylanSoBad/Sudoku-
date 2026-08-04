@@ -13,7 +13,7 @@ export function LevelPlay({ level }: LevelPlayProps) {
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Level {level}</h1>
         <Link href="/" className="text-sm text-shelby-muted hover:text-shelby-fg-strong">
-          ← Back to map
+          Back to map
         </Link>
       </header>
       <div className="rounded-xl border border-shelby-border bg-shelby-surface p-6">

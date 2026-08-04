@@ -11,75 +11,67 @@ import { RevenueSplitBar } from "@/components/revenue-split";
 import { SettingsPanel } from "@/components/settings-panel";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { ReadLedger } from "@/components/read-ledger";
-import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-shelby-bg text-shelby-fg-strong">
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8">
-        <section className="space-y-3">
-          <p className="text-xs uppercase tracking-wider text-shelby-accent2">
-            Aptos × Shelby
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight">
+    <main className="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-8">
+      <section className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-content">
             Sudoku on Shelby
           </h1>
-          <p className="max-w-2xl text-sm text-shelby-muted">
-            Every puzzle is a blob on Shelby. Buy hints with shelbyUSD, solve for rewards, climb 20+ levels of scaling difficulty.
+          <p className="text-sm text-content-muted">
+            Every puzzle is a blob on Shelby. Buy hints with shelbyUSD, solve for rewards.
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-shelby-accent/15 px-3 py-1 text-xs text-shelby-accent">
-              Shelby hot storage · Aptos testnet
-            </span>
-            <StreakBadge />
-            <span className="ml-2 inline-flex gap-2">
-              <Button asChild variant="primary" size="sm">
-                <Link href="/play/1">Play Level 1</Link>
-              </Button>
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/play/daily">Daily Challenge</Link>
-              </Button>
-            </span>
-          </div>
-        </section>
+        </div>
+        <div className="flex items-center gap-2">
+          <StreakBadge />
+          <Link
+            href="/play/1"
+            className="inline-flex h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-white transition-colors duration-100 hover:bg-accent-hover"
+          >
+            Play level 1
+          </Link>
+          <Link
+            href="/play/daily"
+            className="inline-flex h-9 items-center rounded-md border border-line bg-surface-2 px-4 text-sm font-medium text-content transition-colors duration-100 hover:border-line-strong"
+          >
+            Daily challenge
+          </Link>
+        </div>
+      </section>
 
-        <section>
-          <LevelMap />
-        </section>
+      <LevelMap />
 
-        <section className="grid gap-6 lg:grid-cols-2">
-          <DailyCard />
-          <FaucetPanel
-            kind="apt"
-            label="Aptos testnet APT"
-            endpoint="/api/faucet/apt"
-          />
-        </section>
+      <section className="grid gap-6 lg:grid-cols-2">
+        <DailyCard />
+        <FaucetPanel kind="apt" label="Aptos testnet APT" endpoint="/api/faucet/apt" />
+      </section>
 
-        <section id="leaderboard">
-          <Leaderboard />
-        </section>
+      <section id="leaderboard">
+        <Leaderboard />
+      </section>
 
-        <section className="grid gap-6 md:grid-cols-2">
-          <SeasonPassCard />
-          <ReferralCard />
-        </section>
+      <section className="grid gap-6 md:grid-cols-2">
+        <SeasonPassCard />
+        <ReferralCard />
+      </section>
 
-        <section id="badges">
-          <BadgesPanel />
-        </section>
+      <section id="badges">
+        <BadgesPanel />
+      </section>
 
-        <section>
-          <RevenueSplitBar />
-        </section>
+      <RevenueSplitBar />
 
-        <footer className="flex items-center justify-between border-t border-shelby-border pt-6 text-xs text-shelby-muted">
-          <span>Built on Aptos testnet · Blob storage via Shelby Protocol · Not financial advice</span>
-          <SettingsPanel />
-        </footer>
-      </main>
+      <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6 text-xs text-content-subtle">
+        <span>
+          Built on Aptos testnet. Blob storage via Shelby Protocol. Not financial advice.
+        </span>
+        <SettingsPanel />
+      </footer>
+
       <ReadLedger />
       <OnboardingTour />
-    </div>
+    </main>
   );
 }
