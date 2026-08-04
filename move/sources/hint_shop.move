@@ -5,6 +5,11 @@
 /// 1 sUSD = 1e8 raw:
 ///   hint cost = 0.0005 sUSD = 50_000 raw
 ///
+/// Fee split (of HINT_COST_RAW):
+///   50% treasury (Shop.treasury)
+///   30% curator (@sudoku)
+///   20% burn sink (fixed address — not a protocol burn)
+///
 /// A player may buy at most `MAX_HINTS_PER_LEVEL` hints on any single level;
 /// the counter is keyed by (player, level) and never resets.
 module sudoku::hint_shop {
@@ -16,16 +21,17 @@ module sudoku::hint_shop {
     use std::signer;
 
     // FA metadata object address for shelbyUSD on testnet.
-    // Resolved via public view call:
-    //   aptos move view --function-id 0x249f5c642a63885ff88a5113b3ba0079840af5a1357706f8c7f3bfc5dd12511f::shelby_usd::metadata --network testnet
-    // And confirmed via /v1/accounts/{addr}/resources showing
-    // 0x1::fungible_asset::Metadata at this address.
-    // If the shelby_usd module is ever re-upgraded and the metadata object
-    // address moves, update both `hint_shop` and `rewards` here.
     const HARDCODED_SHELBY_USD_METADATA: address = @0x1b18363a9f1fe5e6ebf247daba5cc1c18052bb232efdc4c50f556053922d98e1;
+
+    /// Sink for the 20% "burn" share. Not a protocol-level FA burn — funds
+    /// are transferred here and are effectively irrecoverable.
+    const BURN_SINK: address = @0x000000000000000000000000000000000000000000000000000000000000dead;
 
     /// Flat hint price in raw sUSD (8 decimals) = 0.0005 sUSD.
     const HINT_COST_RAW: u64 = 50_000;
+    const TREASURY_SHARE_RAW: u64 = 25_000;
+    const CURATOR_SHARE_RAW: u64 = 15_000;
+    const BURN_SHARE_RAW: u64 = 10_000;
 
     /// Hints a single player may buy on one level.
     const MAX_HINTS_PER_LEVEL: u64 = 5;
@@ -59,8 +65,12 @@ module sudoku::hint_shop {
         HINT_COST_RAW
     }
 
-    /// Resolve the shelbyUSD FA metadata object address. Hard-coded from the
-    /// testnet view call above so the package compiles standalone.
+    /// Address that receives the treasury share (and season-pass payments).
+    public fun treasury_address(): address acquires Shop {
+        borrow_global<Shop>(@sudoku).treasury
+    }
+
+    /// Resolve the shelbyUSD FA metadata object address.
     public fun shelby_usd_metadata(): Object<Metadata> {
         object::address_to_object<Metadata>(HARDCODED_SHELBY_USD_METADATA)
     }
@@ -105,7 +115,10 @@ module sudoku::hint_shop {
 
         let metadata = shelby_usd_metadata();
         let treasury = borrow_global<Shop>(@sudoku).treasury;
-        primary_fungible_store::transfer(buyer, metadata, treasury, HINT_COST_RAW);
+        // 50 / 30 / 20 split of HINT_COST_RAW.
+        primary_fungible_store::transfer(buyer, metadata, treasury, TREASURY_SHARE_RAW);
+        primary_fungible_store::transfer(buyer, metadata, @sudoku, CURATOR_SHARE_RAW);
+        primary_fungible_store::transfer(buyer, metadata, BURN_SINK, BURN_SHARE_RAW);
 
         let usage = borrow_global_mut<HintUsage>(@sudoku);
         let count_after = bump_count(usage, buyer_addr, level);

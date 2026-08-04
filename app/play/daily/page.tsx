@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { PlayLevelPage } from "@/components/play-level";
-import { levelShareMetadata } from "@/lib/og";
 
-type Props = { params: { level: string } };
+export const metadata: Metadata = {
+  title: "Daily challenge · Sudoku on Shelby",
+  description: "UTC daily sudoku challenge with 2x shelbyUSD reward.",
+};
 
-export function generateMetadata({ params }: Props): Metadata {
-  return levelShareMetadata(Math.max(0, Number(params.level) || 1));
-}
-
+/** Level 0 is the daily sentinel — fetcher maps it to shelby-sudoku-daily-{date}. */
 export default function Page() {
-  return <PlayLevelPage />;
+  return <PlayLevelPage level={0} />;
 }

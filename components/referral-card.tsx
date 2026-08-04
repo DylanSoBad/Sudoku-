@@ -8,12 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import {
   applyReferralCode,
-  claimPendingReferrerCredit,
   ensureInviteCode,
   getLocalCredit,
   hasAppliedReferral,
 } from "@/lib/referral";
-import { buildReferralRegisterPayload } from "@/lib/contracts";
+import {
+  buildPublishCodePayload,
+  buildReferralRegisterPayload,
+} from "@/lib/contracts";
+import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
+import { REFERRAL_BONUS_SUSD } from "@/lib/tokenomics";
 import { useT } from "@/components/app-providers";
 
 export function ReferralCard() {
@@ -23,6 +27,8 @@ export function ReferralCard() {
   const [input, setInput] = useState("");
   const [credit, setCredit] = useState(0);
   const [applied, setApplied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const registry = registryAddress();
 
   useEffect(() => {
     const refresh = () => {
@@ -33,19 +39,52 @@ export function ReferralCard() {
     if (connected && account) {
       const c = ensureInviteCode(account.address.toString());
       setCode(c);
-      const bonus = claimPendingReferrerCredit(account.address.toString());
-      if (bonus > 0) {
-        toast.success(`+${bonus} shelbyUSD ${t.referral.localBonus}`);
+      // Bind the invite code on-chain so referees can look it up.
+      if (registry && signAndSubmitTransaction && !publishing) {
+        setPublishing(true);
+        void (async () => {
+          try {
+            const pending = await signAndSubmitTransaction(buildPublishCodePayload(c));
+            await waitForTxSuccess(pending.hash);
+          } catch (err) {
+            // Already published is fine; other errors are non-fatal for the UI.
+            console.warn("[referral:publish_code]", err);
+          } finally {
+            setPublishing(false);
+          }
+        })();
       }
     } else {
       setCode("");
     }
     window.addEventListener("shelby:credits", refresh);
     return () => window.removeEventListener("shelby:credits", refresh);
-  }, [connected, account, t.referral.localBonus]);
+    // publishing intentionally omitted — one publish attempt per connect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, account, registry, signAndSubmitTransaction]);
 
   const onApply = async () => {
     const addr = account?.address?.toString() ?? null;
+    const trimmed = input.trim().toUpperCase();
+
+    if (registry && connected && signAndSubmitTransaction) {
+      try {
+        const payload = buildReferralRegisterPayload({ code: trimmed });
+        const pending = await signAndSubmitTransaction(payload);
+        await waitForTxSuccess(pending.hash);
+        // Mark local applied so the form hides; on-chain is source of truth.
+        applyReferralCode(trimmed, addr);
+        setApplied(true);
+        toast.success(`Referral registered · +${REFERRAL_BONUS_SUSD} sUSD each`);
+        window.dispatchEvent(new CustomEvent("shelby:balances"));
+        return;
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Referral failed");
+        return;
+      }
+    }
+
+    // Offline fallback — local credit only.
     const result = applyReferralCode(input, addr);
     if (!result.ok) {
       toast.error(result.message);
@@ -54,16 +93,6 @@ export function ReferralCard() {
     setApplied(true);
     setCredit(getLocalCredit());
     toast.success(result.message, { description: t.referral.localBonus });
-
-    if (connected && signAndSubmitTransaction) {
-      try {
-        const payload = buildReferralRegisterPayload({ code: input.trim().toUpperCase() });
-        await signAndSubmitTransaction(payload);
-        toast.success("Referral registered on-chain");
-      } catch (err) {
-        console.warn("[shelby:fallback] referral on-chain skipped", err);
-      }
-    }
   };
 
   return (
@@ -98,10 +127,12 @@ export function ReferralCard() {
           <p className="text-xs text-shelby-muted">{t.faucet.connectFirst}</p>
         )}
 
-        <p className="text-xs text-shelby-muted">
-          {t.referral.localBonus}:{" "}
-          <span className="font-mono text-shelby-gold">{credit.toFixed(2)} sUSD</span>
-        </p>
+        {!registry && (
+          <p className="text-xs text-shelby-muted">
+            {t.referral.localBonus}:{" "}
+            <span className="font-mono text-shelby-gold">{credit.toFixed(2)} sUSD</span>
+          </p>
+        )}
 
         {!applied ? (
           <div className="flex gap-2">

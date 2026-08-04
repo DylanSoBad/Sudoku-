@@ -51,7 +51,7 @@ export function CuratorPanel() {
   const econ = useMemo(() => economicsForLevel(level), [level]);
 
   const preview = useMemo(() => {
-    const { puzzle, solution } = generatePuzzle(level, fnv1a(level + ":" + todayUTC()));
+    const { puzzle, solution } = generatePuzzle(level, fnv1a(level + "-" + todayUTC()));
     return encodePuzzleBlob({
       level,
       difficulty: econ.difficulty,

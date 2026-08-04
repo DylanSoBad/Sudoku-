@@ -147,14 +147,26 @@ export interface ReferralRegisterArgs {
   referrerHint?: string;
 }
 
-/** Build wallet-adapter payload for sudoku::referral::register (optional). */
+/** Build wallet-adapter payload for sudoku::referral::publish_code. */
+export function buildPublishCodePayload(code: string): InputTransactionData {
+  const mod = registryAddress();
+  return {
+    data: {
+      function: `${mod}::referral::publish_code`,
+      typeArguments: [],
+      functionArguments: [toHexBytes(code.trim().toUpperCase())],
+    },
+  };
+}
+
+/** Build wallet-adapter payload for sudoku::referral::register. */
 export function buildReferralRegisterPayload(args: ReferralRegisterArgs): InputTransactionData {
   const mod = registryAddress();
   return {
     data: {
       function: `${mod}::referral::register`,
       typeArguments: [],
-      functionArguments: [toHexBytes(args.code), toHexBytes(args.referrerHint ?? "")],
+      functionArguments: [toHexBytes(args.code.trim().toUpperCase()), toHexBytes(args.referrerHint ?? "")],
     },
   };
 }

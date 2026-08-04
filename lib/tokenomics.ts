@@ -66,15 +66,21 @@ export const HINT_FEE_SPLIT = {
   burn: 0.2,
 } as const;
 
-export const REFERRAL_BONUS_SUSD = 0.25;
+/** Per-side referral payout (referee + referrer each get this). */
+export const REFERRAL_BONUS_SUSD = 0.01;
 
 export const SEASON_PASS = {
-  price: 25,
-  priceShelbyUsd: 25,
+  price: 0.1,
+  priceShelbyUsd: 0.1,
   durationDays: 30,
   bonusMultiplier: 1.5,
   freeHintsPerDay: 3,
   hintDiscount: 0.5,
 } as const;
 
-export const DAILY_BONUS_MULT = 1.2;
+/** Daily challenge pays 2x via rewards::claim(level=0). */
+export const DAILY_BONUS_MULT = 2;
+
+/** On-chain burn sink for the 20% hint fee share (not a protocol FA burn). */
+export const HINT_BURN_SINK =
+  "0x000000000000000000000000000000000000000000000000000000000000dead";

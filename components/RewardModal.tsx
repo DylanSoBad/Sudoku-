@@ -5,7 +5,11 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { explorerTxUrl, formatMs } from "@/lib/utils";
-import { REWARD_PER_LEVEL_SUSD, MAX_LEVEL } from "@/lib/tokenomics";
+import {
+  DAILY_BONUS_MULT,
+  MAX_LEVEL,
+  REWARD_PER_LEVEL_SUSD,
+} from "@/lib/tokenomics";
 import { markCleared } from "@/lib/progress";
 import { useRouter } from "next/navigation";
 import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
@@ -37,11 +41,19 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
   const [claimError, setClaimError] = useState<string | undefined>(undefined);
 
   const registry = registryAddress();
-  const isLastLevel = level >= MAX_LEVEL;
+  const isDaily = level === 0;
+  const isLastLevel = !isDaily && level >= MAX_LEVEL;
+  const rewardSusd = isDaily
+    ? REWARD_PER_LEVEL_SUSD * DAILY_BONUS_MULT
+    : REWARD_PER_LEVEL_SUSD;
 
   function goNext() {
     onClose();
-    router.push(isLastLevel ? "/" : `/play/${level + 1}`);
+    if (isDaily || isLastLevel) {
+      router.push("/");
+      return;
+    }
+    router.push(`/play/${level + 1}`);
   }
 
   async function handleClaimAndNext() {
@@ -64,6 +76,7 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
         data: {
           function: `${registry}::rewards::claim`,
           typeArguments: [],
+          // Level 0 = daily (2x on-chain). Campaign levels 1–20 = flat 0.01.
           functionArguments: [level],
         },
       };
@@ -71,8 +84,9 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
       await waitForTxSuccess(pending.hash);
       setClaimed(true);
       setClaimTxHash(pending.hash);
-      // Persist HMAC progress unlocking level N+1 only after success.
-      await markCleared(account.address, level);
+      if (!isDaily) {
+        await markCleared(account.address, level);
+      }
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       goNext();
     } catch (e) {
@@ -82,15 +96,18 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
     }
   }
 
+  const title = isDaily ? "Daily challenge solved" : `Level ${pad2(level)} solved`;
+
   return (
-    <Dialog open={open} onClose={onClose} title={`Level ${pad2(level)} solved`}>
+    <Dialog open={open} onClose={onClose} title={title}>
       <div className="flex flex-col gap-5">
         <p className="-mt-2 font-mono text-xs text-content-muted">
           {formatMs(ms)} · {hints} hint{hints === 1 ? "" : "s"}
+          {isDaily ? " · 2x daily bonus" : ""}
         </p>
 
         <div className="font-mono text-3xl text-accent-hover">
-          +{REWARD_PER_LEVEL_SUSD.toFixed(3)} sUSD
+          +{rewardSusd.toFixed(3)} sUSD
         </div>
 
         {claimError && (
@@ -109,7 +126,7 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
             Back
           </Button>
           <Button className="flex-1" onClick={handleClaimAndNext} disabled={claiming}>
-            {claiming ? "Claiming" : claimed ? "Next" : "Claim + Next"}
+            {claiming ? "Claiming" : claimed ? (isDaily ? "Done" : "Next") : "Claim + Next"}
           </Button>
         </div>
 

@@ -100,50 +100,79 @@ export function generateFallbackPuzzle(level: number): FetchedPuzzle {
   };
 }
 
-/** Tier 1. Only this tier needs an account; returns null instead of throwing. */
-async function tierShelby(level: number, date: string): Promise<FetchedPuzzle | null> {
-  if (typeof window === "undefined") return null;
-
-  const account = curatorAccount();
-  if (!account) {
-    console.warn(
-      "[shelby:fallback]",
-      "no curator account configured (set NEXT_PUBLIC_CURATOR_ADDRESS)",
-    );
+/**
+ * Same-origin curator mirror written by `scripts/seed-puzzles.mjs`.
+ * Used when the Shelby SDK download is unavailable (missing API key, network
+ * timeout, etc.) so production still serves the curated blob bytes.
+ */
+async function tryPublicMirror(blobName: string): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(`/puzzles/${encodeURIComponent(blobName)}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch {
     return null;
   }
+}
+
+/** Tier 1. Curated blob via Shelby SDK, then public/puzzles mirror. */
+async function tierShelby(level: number, date: string): Promise<FetchedPuzzle | null> {
+  if (typeof window === "undefined") return null;
 
   const blobName = dailyBlobName(level, date);
   if (shelbyMisses.has(blobName)) return null;
 
-  try {
-    // The dynamic import is inside the timeout too: a stalled chunk fetch
-    // would otherwise hang the cascade just as a stalled download did.
-    const bytes = await withTimeout(
-      (async () => {
-        const mod = await import("@shelby-protocol/sdk/browser");
-        const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
-        const client = new mod.ShelbyBlobClient({
-          apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
-          network: "shelbynet",
-        });
-        const buf = await (client as unknown as {
-          download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
-        }).download({ account, blobName });
-        return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-      })(),
-      SHELBY_TIMEOUT_MS,
-      `shelby download ${blobName}`,
-    );
+  const account = curatorAccount();
 
-    const blob = decodePuzzleBlob(bytes);
-    writeCache(level, date, bytes);
-    return { ...blob, source: "shelby" };
-  } catch (err) {
-    shelbyMisses.add(blobName);
-    console.warn("[shelby:fallback]", err);
-    return null;
+  if (account) {
+    try {
+      // The dynamic import is inside the timeout too: a stalled chunk fetch
+      // would otherwise hang the cascade just as a stalled download did.
+      const bytes = await withTimeout(
+        (async () => {
+          const mod = await import("@shelby-protocol/sdk/browser");
+          const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
+          const client = new mod.ShelbyBlobClient({
+            apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
+            network: "shelbynet",
+          });
+          const buf = await (client as unknown as {
+            download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
+          }).download({ account, blobName });
+          return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+        })(),
+        SHELBY_TIMEOUT_MS,
+        `shelby download ${blobName}`,
+      );
+
+      const blob = decodePuzzleBlob(bytes);
+      writeCache(level, date, bytes);
+      return { ...blob, source: "shelby" };
+    } catch (err) {
+      console.warn("[shelby:fallback]", err);
+    }
+  } else {
+    console.warn(
+      "[shelby:fallback]",
+      "no curator account configured — trying public puzzle mirror",
+    );
   }
+
+  const mirrored = await tryPublicMirror(blobName);
+  if (mirrored) {
+    try {
+      const blob = decodePuzzleBlob(mirrored);
+      writeCache(level, date, mirrored);
+      return { ...blob, source: "shelby" };
+    } catch (err) {
+      console.warn("[shelby:fallback] public mirror decode failed", err);
+    }
+  }
+
+  shelbyMisses.add(blobName);
+  return null;
 }
 
 /** Tier 2. Runs regardless of wallet or curator configuration. */

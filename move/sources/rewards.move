@@ -3,6 +3,10 @@
 /// Flat reward for clearing any level, sized to fit shelbyUSD faucet limits.
 /// shelbyUSD has **8** decimals on testnet, so 1 sUSD = 1e8 raw:
 ///   reward = 0.01 sUSD = 1_000_000 raw
+///   daily (level 0) = 0.02 sUSD = 2_000_000 raw
+///
+/// Level `0` is the daily-challenge claim key so it never collides with
+/// campaign levels 1–20.
 ///
 /// The module creates a `SignerCap` at `init` time so it can move funds
 /// out of a resource account without prompting the deployer on every
@@ -17,13 +21,18 @@ module sudoku::rewards {
     use std::signer;
     use aptos_std::table::{Self, Table};
 
-    // FA metadata object address for shelbyUSD on testnet (mirror of the
-    // constant in hint_shop.move). Resolve via:
-    //   aptos move view --function-id 0x249f5c642a63885ff88a5113b3ba0079840af5a1357706f8c7f3bfc5dd12511f::shelby_usd::metadata --network testnet
+    friend sudoku::referral;
+
     const HARDCODED_SHELBY_USD_METADATA: address = @0x1b18363a9f1fe5e6ebf247daba5cc1c18052bb232efdc4c50f556053922d98e1;
 
     /// Flat reward in raw sUSD (8 decimals) = 0.01 sUSD.
     const REWARD_RAW: u64 = 1_000_000;
+    /// Daily challenge (level 0) pays 2x.
+    const DAILY_REWARD_RAW: u64 = 2_000_000;
+    /// Per-side referral bonus = 0.01 sUSD.
+    const REFERRAL_BONUS_RAW: u64 = 1_000_000;
+
+    const E_ALREADY_CLAIMED: u64 = 1001;
 
     struct Rewards has key {
         treasury_signer_cap: account::SignerCapability,
@@ -33,9 +42,6 @@ module sudoku::rewards {
     #[event]
     struct RewardClaimed has drop, store { player: address, level: u64, amount: u64 }
 
-    /// One-time initialization. Computes the resource account address from
-    /// `admin + seed` and stores a `SignerCap` for it. The deployer funds
-    /// the resource account via `top_up_treasury`.
     public entry fun init(admin: &signer) {
         let seed = b"shelby-sudoku-rewards";
         let (_treasury_signer, cap) = account::create_resource_account(admin, seed);
@@ -43,9 +49,13 @@ module sudoku::rewards {
         move_to(admin, Rewards { treasury_signer_cap: cap, claimed });
     }
 
-    /// Flat per-level reward, raw sUSD (8 decimals).
-    public fun reward_for(_level: u64): u64 {
-        REWARD_RAW
+    /// Per-level reward. Level 0 (daily) is 2x; everything else is flat.
+    public fun reward_for(level: u64): u64 {
+        if (level == 0) {
+            DAILY_REWARD_RAW
+        } else {
+            REWARD_RAW
+        }
     }
 
     public fun shelby_usd_metadata(): Object<Metadata> {
@@ -71,8 +81,6 @@ module sudoku::rewards {
         };
     }
 
-    /// Deployer seeds the rewards pool by transferring shelbyUSD FA from
-    /// their primary store to the resource account's primary store.
     public entry fun top_up_treasury(admin: &signer, amount: u64) acquires Rewards {
         let r = borrow_global<Rewards>(@sudoku);
         let treasury_addr = account::get_signer_capability_address(&r.treasury_signer_cap);
@@ -83,14 +91,25 @@ module sudoku::rewards {
     public entry fun claim(player: &signer, level: u64) acquires Rewards {
         let r = borrow_global_mut<Rewards>(@sudoku);
         let player_addr = signer::address_of(player);
-        if (player_claimed(r, player_addr, level)) {
-            abort 1001
-        };
+        assert!(!player_claimed(r, player_addr, level), E_ALREADY_CLAIMED);
         let amount = reward_for(level);
         let metadata = shelby_usd_metadata();
         let treasury_signer = account::create_signer_with_capability(&r.treasury_signer_cap);
         primary_fungible_store::transfer(&treasury_signer, metadata, player_addr, amount);
         mark_claimed(r, player_addr, level);
         event::emit(RewardClaimed { player: player_addr, level, amount });
+    }
+
+    /// Pay a flat referral bonus from the rewards treasury. Only callable by
+    /// `sudoku::referral` so random clients cannot drain the pool.
+    public(friend) fun pay_bonus(to: address, amount: u64) acquires Rewards {
+        let r = borrow_global<Rewards>(@sudoku);
+        let metadata = shelby_usd_metadata();
+        let treasury_signer = account::create_signer_with_capability(&r.treasury_signer_cap);
+        primary_fungible_store::transfer(&treasury_signer, metadata, to, amount);
+    }
+
+    public fun referral_bonus_raw(): u64 {
+        REFERRAL_BONUS_RAW
     }
 }

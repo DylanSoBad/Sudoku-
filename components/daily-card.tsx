@@ -6,15 +6,14 @@ import { CalendarDays, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DAILY_LEVEL, isDailyCompleted } from "@/lib/daily";
-import { getLevelMeta } from "@/lib/sudoku";
+import { isDailyCompleted } from "@/lib/daily";
+import { DAILY_BONUS_MULT, REWARD_PER_LEVEL_SUSD } from "@/lib/tokenomics";
 import { utcDateKey } from "@/lib/streak";
 
 export function DailyCard() {
   const [done, setDone] = useState(false);
   const [dateKey, setDateKey] = useState("");
-  const meta = getLevelMeta(DAILY_LEVEL);
-  const reward = Math.round(meta.reward * 2 * 100) / 100;
+  const reward = Math.round(REWARD_PER_LEVEL_SUSD * DAILY_BONUS_MULT * 1000) / 1000;
 
   useEffect(() => {
     setDateKey(utcDateKey());
@@ -35,7 +34,7 @@ export function DailyCard() {
               <Check className="h-3 w-3" /> Done
             </Badge>
           ) : (
-            <Badge variant="accent">2x reward</Badge>
+            <Badge variant="accent">{DAILY_BONUS_MULT}x reward</Badge>
           )}
         </div>
         <CardDescription>

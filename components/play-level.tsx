@@ -15,11 +15,11 @@ import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
 import { explorerTxUrl } from "@/lib/utils";
 import {
   economicsForLevel,
-  DAILY_BONUS_MULT,
   HINT_COST_LABEL,
   MAX_HINTS_PER_LEVEL,
   MAX_LEVEL,
 } from "@/lib/tokenomics";
+import { markDailyComplete } from "@/lib/daily";
 import {
   bumpLocalHintsUsed,
   fetchOnChainHintsUsed,
@@ -53,7 +53,15 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const router = useRouter();
   const { account, signAndSubmitTransaction } = useWallet();
   const raw = levelProp !== undefined ? String(levelProp) : (params?.level ?? params?.n ?? "1");
-  const level = Math.max(1, Number(raw) || 1);
+  // Level 0 is the daily-challenge sentinel (see app/play/daily). Campaign is 1–20.
+  const parsed = Number(raw);
+  const level =
+    levelProp === 0 || raw === "0"
+      ? 0
+      : Number.isFinite(parsed) && parsed >= 0
+        ? Math.min(MAX_LEVEL, Math.floor(parsed)) || 1
+        : 1;
+  const isDaily = level === 0;
   const registry = registryAddress();
 
   const [puzzle, setPuzzle] = useState<FetchedPuzzle | null>(null);
@@ -118,14 +126,17 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setIsSolved(true);
     setRewardOpen(true);
     if (account?.address) {
-      // Reward is settled on-chain via the registered Move package (or the
-      // off-chain HMAC shim when registry is unset). Just bump UI signals.
-      markCleared(account.address, level).catch(() => undefined);
-      recordRun(account.address, level, Date.now() - startedAt.current);
+      // Campaign progress is HMAC-local; daily does not unlock campaign levels.
+      if (!isDaily) {
+        markCleared(account.address, level).catch(() => undefined);
+        recordRun(account.address, level, Date.now() - startedAt.current);
+      } else {
+        markDailyComplete();
+      }
       bumpStreak();
       window.dispatchEvent(new CustomEvent("shelby:balances"));
     }
-  }, [account?.address, level]);
+  }, [account?.address, level, isDaily]);
 
   const refreshHints = useCallback(async () => {
     const addr = account?.address;
@@ -246,7 +257,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-content">
-            Level {pad2(level)}
+            {isDaily ? "Daily challenge" : `Level ${pad2(level)}`}
           </h1>
           <p className="text-xs uppercase tracking-wide text-content-muted">
             {econ.difficulty} - {econ.empties} empty
@@ -321,7 +332,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
               <Button variant="secondary" onClick={() => router.push("/")}>
                 Back to levels
               </Button>
-              {level < MAX_LEVEL && (
+              {!isDaily && level < MAX_LEVEL && (
                 <Button variant="primary" onClick={handleNext}>
                   Next level
                 </Button>

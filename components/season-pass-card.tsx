@@ -15,8 +15,8 @@ import {
 } from "@/lib/season-pass";
 import { SEASON_PASS } from "@/lib/tokenomics";
 import { buildPurchaseSeasonPassPayload } from "@/lib/contracts";
-import { getAptosClient } from "@/lib/balances";
-import { toRawShelbyUsd } from "@/lib/aptos";
+import { registryAddress, toRawShelbyUsd, waitForTxSuccess } from "@/lib/aptos";
+import { explorerTxUrl } from "@/lib/utils";
 import { useT } from "@/components/app-providers";
 
 export function SeasonPassCard() {
@@ -24,6 +24,7 @@ export function SeasonPassCard() {
   const { connected, signAndSubmitTransaction } = useWallet();
   const [pass, setPass] = useState<SeasonPassState | null>(null);
   const [loading, setLoading] = useState(false);
+  const registry = registryAddress();
 
   useEffect(() => {
     const refresh = () => setPass(getSeasonPass());
@@ -41,25 +42,28 @@ export function SeasonPassCard() {
     }
     setLoading(true);
     try {
-      let txHash: string | undefined;
-      let source: "local" | "chain" = "local";
-      try {
-        const payload = buildPurchaseSeasonPassPayload({
-          priceMicro: toRawShelbyUsd(SEASON_PASS.priceShelbyUsd),
-        });
-        const pending = await signAndSubmitTransaction(payload);
-        const aptos = getAptosClient();
-        await aptos.waitForTransaction({ transactionHash: pending.hash });
-        txHash = pending.hash;
-        source = "chain";
-        toast.success("Season Pass purchased on-chain");
-        window.dispatchEvent(new CustomEvent("shelby:balances"));
-      } catch (err) {
-        console.warn("[shelby:fallback] season_pass purchase local", err);
+      if (!registry) {
+        // Offline only when registry is unset.
+        const next = purchaseSeasonPassLocal(undefined, "local");
+        setPass(next);
         toast.message(t.seasonPass.localPurchase);
+        return;
       }
-      const next = purchaseSeasonPassLocal(txHash, source);
+      if (!signAndSubmitTransaction) {
+        toast.error("Wallet cannot sign transactions");
+        return;
+      }
+      const payload = buildPurchaseSeasonPassPayload({
+        priceMicro: toRawShelbyUsd(SEASON_PASS.priceShelbyUsd),
+      });
+      const pending = await signAndSubmitTransaction(payload);
+      await waitForTxSuccess(pending.hash);
+      const next = purchaseSeasonPassLocal(pending.hash, "chain");
       setPass(next);
+      toast.success("Season Pass purchased", {
+        description: explorerTxUrl(pending.hash),
+      });
+      window.dispatchEvent(new CustomEvent("shelby:balances"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Purchase failed");
     } finally {

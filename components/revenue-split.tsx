@@ -1,6 +1,6 @@
 "use client";
 
-import { HINT_FEE_SPLIT } from "@/lib/tokenomics";
+import { HINT_BURN_SINK, HINT_FEE_SPLIT } from "@/lib/tokenomics";
 import { useT } from "@/components/app-providers";
 
 export function RevenueSplitBar({ compact = false }: { compact?: boolean }) {
@@ -12,6 +12,8 @@ export function RevenueSplitBar({ compact = false }: { compact?: boolean }) {
     { key: "curator" as const, pct: HINT_FEE_SPLIT.curator, label: t.tokenomics.curator, color: "bg-accent/55" },
     { key: "burn" as const, pct: HINT_FEE_SPLIT.burn, label: t.tokenomics.burn, color: "bg-accent/25" },
   ];
+
+  const burnShort = `${HINT_BURN_SINK.slice(0, 6)}…${HINT_BURN_SINK.slice(-4)}`;
 
   return (
     <div className={compact ? "space-y-1.5" : "space-y-2"}>
@@ -37,6 +39,12 @@ export function RevenueSplitBar({ compact = false }: { compact?: boolean }) {
           </span>
         ))}
       </div>
+      {!compact ? (
+        <p className="text-[11px] text-content-subtle">
+          Burn share is sent to sink <span className="font-mono">{burnShort}</span>, not a
+          protocol FA burn.
+        </p>
+      ) : null}
     </div>
   );
 }
