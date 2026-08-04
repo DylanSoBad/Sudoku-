@@ -26,13 +26,15 @@ function resolveApiKey(): string | undefined {
 export function WalletProvider({ children }: PropsWithChildren) {
   const network = resolveNetwork();
   const apiKey = resolveApiKey();
+  // Adapter may pin an older ts-sdk Network enum (no SHELBYNET). Cast at boundary.
+  const adapterNetwork = network as unknown as typeof Network.TESTNET;
 
   return (
     <AptosWalletAdapterProvider
       autoConnect
       optInWallets={["Petra", "Pontem Wallet", "Nightly"]}
       dappConfig={{
-        network,
+        network: adapterNetwork as never,
         ...(apiKey
           ? {
               aptosApiKeys: {

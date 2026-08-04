@@ -82,8 +82,9 @@ export function getAptosClient(): Aptos {
   const apiKey = readApiKey();
 
   if (net === "shelbynet") {
+    const shelbyNet = (Network as unknown as { SHELBYNET?: Network }).SHELBYNET;
     const cfg = new AptosConfig({
-      network: Network.TESTNET,
+      network: shelbyNet ?? Network.TESTNET,
       fullnode: SHELBYNET_FULLNODE,
       ...(apiKey ? { clientConfig: { API_KEY: apiKey } } : {}),
     });

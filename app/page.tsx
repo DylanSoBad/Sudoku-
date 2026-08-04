@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { LevelMap } from "@/components/LevelMap";
 import { Leaderboard } from "@/components/Leaderboard";
-import { FaucetPanel } from "@/components/Faucet";
 import { BadgesPanel } from "@/components/badges-panel";
 import { ReferralCard } from "@/components/referral-card";
 import { SeasonPassCard } from "@/components/season-pass-card";
@@ -43,10 +42,7 @@ export default function HomePage() {
 
       <LevelMap />
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <DailyCard />
-        <FaucetPanel kind="apt" label="Aptos testnet APT" endpoint="/api/faucet/apt" />
-      </section>
+      <DailyCard />
 
       <section id="leaderboard">
         <Leaderboard />

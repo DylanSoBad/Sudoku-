@@ -1,0 +1,64 @@
+name: Seed daily puzzle
+
+on:
+  schedule:
+    # 00:05 UTC — new daily blob for the UTC calendar day
+    - cron: "5 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  seed-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Write Aptos profile
+        env:
+          APTOS_PRIVATE_KEY: ${{ secrets.APTOS_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APTOS_PRIVATE_KEY" ]; then
+            echo "APTOS_PRIVATE_KEY secret is required" >&2
+            exit 1
+          fi
+          mkdir -p move/.aptos
+          KEY="$APTOS_PRIVATE_KEY"
+          case "$KEY" in
+            ed25519-priv-*) ;;
+            0x*) KEY="ed25519-priv-$KEY" ;;
+            *) KEY="ed25519-priv-0x$KEY" ;;
+          esac
+          cat > move/.aptos/config.yaml <<EOF
+          profiles:
+            sudoku:
+              private_key: "$KEY"
+              network: testnet
+          EOF
+
+      - name: Seed daily puzzle
+        env:
+          SHELBY_API_KEY: ${{ secrets.SHELBY_API_KEY }}
+          NEXT_PUBLIC_SHELBY_API_KEY: ${{ secrets.SHELBY_API_KEY }}
+        run: node scripts/seed-puzzles.mjs --daily-only
+
+      - name: Commit public puzzle mirror
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/puzzles
+          if git diff --staged --quiet; then
+            echo "No puzzle file changes"
+            exit 0
+          fi
+          git commit -m "chore: refresh daily puzzle blob"
+          git push

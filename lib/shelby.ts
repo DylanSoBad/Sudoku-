@@ -3,6 +3,8 @@
  * Falls back to local generation when unavailable.
  */
 
+import { Network } from "@aptos-labs/ts-sdk";
+
 export interface ShelbyDownloadClient {
   download(args: { account: string; blobName: string }): Promise<Uint8Array>;
 }
@@ -40,6 +42,10 @@ export interface FetchedPuzzle {
   source: "shelby" | "cache" | "generated";
 }
 
+const SHELBY_RPC = "https://api.shelbynet.shelby.xyz/shelby";
+const SHELBY_INDEXER =
+  "https://api.shelbynet.aptoslabs.com/nocode/v1/public/cmforrguw0042s601fn71f9l2/v1/graphql";
+
 let cachedClient: ShelbyUploadClient | null = null;
 let cachedPut: ShelbyPutClient | null = null;
 
@@ -49,43 +55,100 @@ function readApiKey(): string | undefined {
   return raw;
 }
 
-export async function getBrowserClient(): Promise<ShelbyUploadClient | null> {
-  if (typeof window === "undefined") return null;
-  if (cachedClient) return cachedClient;
+function shelbyNetwork(): Network {
+  const n = Network as unknown as Record<string, Network>;
+  return n.SHELBYNET ?? Network.TESTNET;
+}
+
+async function createRawShelbyClient(): Promise<{
+  download: (args: { account: string; blobName: string }) => Promise<Uint8Array>;
+  putBlob: (args: { account: string; blobName: string; bytes: Uint8Array }) => Promise<void>;
+} | null> {
   try {
-    const mod = await import("@shelby-protocol/sdk/browser");
+    const mod = (await import("@shelby-protocol/sdk/browser")) as unknown as {
+      ShelbyClient?: new (opts: Record<string, unknown>) => unknown;
+      ShelbyBlobClient?: new (opts: Record<string, unknown>) => unknown;
+    };
     const apiKey = readApiKey();
-    const ctor = (mod as Record<string, unknown>)["ShelbyBlobClient"];
-    if (typeof ctor !== "function") {
-      console.warn("[shelby:fallback]", "ShelbyBlobClient constructor missing");
+    const Client = mod.ShelbyClient ?? mod.ShelbyBlobClient;
+    if (typeof Client !== "function") {
+      console.warn("[shelby:fallback]", "ShelbyClient constructor missing");
       return null;
     }
-    const Ctor = ctor as new (opts: { apiKey?: string; network: string }) => unknown;
-    const raw = new Ctor({ apiKey, network: "shelbynet" }) as Record<string, unknown>;
-    const dl = raw["download"] as
-      | ((args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>)
-      | undefined;
-    const ul = raw["upload"] as
-      | ((args: { account: string; blobName: string; data: Uint8Array }) => Promise<void>)
-      | undefined;
-    if (typeof dl !== "function" || typeof ul !== "function") {
-      console.warn("[shelby:fallback]", "client missing download/upload");
-      return null;
-    }
-    cachedClient = {
+    const raw = new Client({
+      network: shelbyNetwork(),
+      apiKey,
+      rpc: { baseUrl: SHELBY_RPC, apiKey },
+      indexer: { baseUrl: SHELBY_INDEXER, apiKey },
+    }) as {
+      download?: (args: { account: string; blobName: string }) => Promise<{
+        data?: Uint8Array | ArrayBuffer;
+        bytes?: Uint8Array | ArrayBuffer;
+      } | Uint8Array | ArrayBuffer>;
+      rpc?: {
+        putBlob?: (args: {
+          account: string;
+          blobName: string;
+          blobData: Uint8Array;
+        }) => Promise<unknown>;
+      };
+      upload?: (args: Record<string, unknown>) => Promise<void>;
+    };
+
+    return {
       async download(args) {
-        const out = await dl(args);
-        return out instanceof Uint8Array ? out : new Uint8Array(out);
+        if (typeof raw.download !== "function") {
+          throw new Error("shelby download unavailable");
+        }
+        const out = await raw.download(args);
+        if (out instanceof Uint8Array) return out;
+        if (out instanceof ArrayBuffer) return new Uint8Array(out);
+        const data = out?.data ?? out?.bytes;
+        if (data instanceof Uint8Array) return data;
+        if (data instanceof ArrayBuffer) return new Uint8Array(data);
+        throw new Error("shelby download returned unexpected shape");
       },
-      async upload(args) {
-        await ul({ account: args.account, blobName: args.blobName, data: args.bytes });
+      async putBlob(args) {
+        if (typeof raw.rpc?.putBlob === "function") {
+          await raw.rpc.putBlob({
+            account: args.account,
+            blobName: args.blobName,
+            blobData: args.bytes,
+          });
+          return;
+        }
+        // Last resort: some SDK builds expose a top-level upload that still
+        // expects a signer Account — curator flows should prefer putBlob.
+        if (typeof raw.upload === "function") {
+          await raw.upload({
+            account: args.account,
+            blobName: args.blobName,
+            data: args.bytes,
+            blobData: args.bytes,
+          });
+          return;
+        }
+        throw new Error("shelby putBlob unavailable");
       },
     };
-    return cachedClient;
   } catch (err) {
     console.warn("[shelby:fallback]", err);
     return null;
   }
+}
+
+export async function getBrowserClient(): Promise<ShelbyUploadClient | null> {
+  if (typeof window === "undefined") return null;
+  if (cachedClient) return cachedClient;
+  const raw = await createRawShelbyClient();
+  if (!raw) return null;
+  cachedClient = {
+    download: raw.download,
+    async upload(args) {
+      await raw.putBlob(args);
+    },
+  };
+  return cachedClient;
 }
 
 export async function getShelbyClient(): Promise<ShelbyUploadClient | null> {
@@ -99,36 +162,15 @@ export async function getRegisterClient(): Promise<ShelbyUploadClient | null> {
 export async function getShelbyPutClient(): Promise<ShelbyPutClient | null> {
   if (typeof window === "undefined") return null;
   if (cachedPut) return cachedPut;
-  try {
-    const mod = await import("@shelby-protocol/sdk/browser");
-    const ns = mod as Record<string, unknown>;
-    const putBlob =
-      (ns["putBlob"] as ((args: {
-        account: string;
-        blobName: string;
-        bytes: Uint8Array;
-      }) => Promise<{ txHash: string; merkleRoot: string }>) | undefined) ??
-      ((ns["default"] as Record<string, unknown> | undefined)?.["putBlob"] as
-        | ((args: {
-            account: string;
-            blobName: string;
-            bytes: Uint8Array;
-          }) => Promise<{ txHash: string; merkleRoot: string }>)
-        | undefined);
-    if (typeof putBlob !== "function") {
-      console.warn("[shelby:fallback]", "putBlob not exposed by browser SDK");
-      return null;
-    }
-    cachedPut = {
-      async putBlob(args) {
-        return putBlob({ account: args.account, blobName: args.blobName, bytes: args.bytes });
-      },
-    };
-    return cachedPut;
-  } catch (err) {
-    console.warn("[shelby:fallback]", err);
-    return null;
-  }
+  const raw = await createRawShelbyClient();
+  if (!raw) return null;
+  cachedPut = {
+    async putBlob(args) {
+      await raw.putBlob(args);
+      return { txHash: "rpc-put", merkleRoot: "" };
+    },
+  };
+  return cachedPut;
 }
 
 export async function fetchBlobBytes(args: { account: string; blobName: string }): Promise<Uint8Array | null> {

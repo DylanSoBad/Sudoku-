@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
-import { Delete } from "lucide-react";
+import { Delete, Pencil, Redo2, Undo2 } from "lucide-react";
 import { SudokuBoard, type SudokuBoardHandle } from "./sudoku-board";
 import { Button } from "@/components/ui/button";
 import { RewardModal } from "./RewardModal";
+import { cn } from "@/lib/utils";
 import { fetchPuzzle, generateFallbackPuzzle, type FetchedPuzzle } from "@/lib/fetcher";
 import { recordRead } from "./ReadLedger";
 import { findEmpty, isSolved as checkSolved } from "@/lib/sudoku";
@@ -71,6 +72,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const [rewardOpen, setRewardOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [isSolved, setIsSolved] = useState(false);
+  const [notesMode, setNotesMode] = useState(false);
+  const [historyTick, setHistoryTick] = useState(0);
   const startedAt = useRef<number>(Date.now());
   const boardRef = useRef<SudokuBoardHandle | null>(null);
   const rewardFired = useRef(false);
@@ -82,6 +85,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setError(null);
     setRewardOpen(false);
     setIsSolved(false);
+    setNotesMode(false);
+    setHistoryTick(0);
     rewardFired.current = false;
     fetchPuzzle(level)
       .then((p) => {
@@ -158,6 +163,10 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     void refreshHints();
   }, [refreshHints]);
 
+  const bumpHistory = useCallback(() => {
+    setHistoryTick((n) => n + 1);
+  }, []);
+
   const buyHint = useCallback(async () => {
     if (!puzzle || buying) return;
     const addr = account?.address;
@@ -177,6 +186,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     if (!registry) {
       boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);
       setHintCount(bumpLocalHintsUsed(addr, level));
+      bumpHistory();
       return;
     }
 
@@ -194,6 +204,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       // Only reveal after the transfer commits, so a rejected or aborted
       // transaction never yields a free hint.
       boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);
+      bumpHistory();
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       await refreshHints();
       toast.success("Hint purchased", {
@@ -219,14 +230,27 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     registry,
     refreshHints,
     signAndSubmitTransaction,
+    bumpHistory,
   ]);
 
   const handleDigit = (d: number) => {
     boardRef.current?.setDigit(d);
+    bumpHistory();
   };
 
   const handleClear = () => {
     boardRef.current?.clear();
+    bumpHistory();
+  };
+
+  const handleUndo = () => {
+    boardRef.current?.undo();
+    bumpHistory();
+  };
+
+  const handleRedo = () => {
+    boardRef.current?.redo();
+    bumpHistory();
   };
 
   const handleNext = () => {
@@ -251,6 +275,10 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   }, [level]);
 
   const atHintLimit = hintLimitReached(hintCount);
+  // historyTick forces re-read of canUndo/canRedo after board mutations.
+  void historyTick;
+  const canUndo = boardRef.current?.canUndo() ?? false;
+  const canRedo = boardRef.current?.canRedo() ?? false;
 
   return (
     <main className="mx-auto flex max-w-[720px] flex-col px-6 pb-16 pt-8">
@@ -283,7 +311,13 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
         <>
           <div className="flex justify-center">
             <div className="rounded-lg border border-line bg-surface-2 p-3">
-              <SudokuBoard ref={boardRef} puzzle={puzzle.puzzle} onSolve={onSolve} />
+              <SudokuBoard
+                ref={boardRef}
+                puzzle={puzzle.puzzle}
+                onSolve={onSolve}
+                notesMode={notesMode}
+                onChange={bumpHistory}
+              />
             </div>
           </div>
 
@@ -292,7 +326,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
               <button
                 key={d}
                 type="button"
-                aria-label={`Enter ${d}`}
+                aria-label={notesMode ? `Toggle note ${d}` : `Enter ${d}`}
                 onClick={() => handleDigit(d)}
                 className="h-10 w-11 rounded-md border border-line bg-surface-2 font-mono text-base text-content transition-colors duration-100 hover:border-line-strong"
               >
@@ -309,10 +343,45 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
             </button>
           </div>
 
+          <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+            <button
+              type="button"
+              aria-label="Undo"
+              aria-keyshortcuts="Control+Z"
+              disabled={!canUndo}
+              onClick={handleUndo}
+              className="flex h-9 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-content-muted transition-colors duration-100 hover:border-line-strong hover:text-content disabled:opacity-40"
+            >
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Redo"
+              aria-keyshortcuts="Control+Y"
+              disabled={!canRedo}
+              onClick={handleRedo}
+              className="flex h-9 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-content-muted transition-colors duration-100 hover:border-line-strong hover:text-content disabled:opacity-40"
+            >
+              <Redo2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Toggle notes"
+              aria-pressed={notesMode}
+              onClick={() => setNotesMode((v) => !v)}
+              className={cn(
+                "flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors duration-100",
+                notesMode
+                  ? "border-accent bg-accent/10 text-accent-hover"
+                  : "border-line bg-surface-2 text-content-muted hover:border-line-strong hover:text-content",
+              )}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Notes
+            </button>
+          </div>
+
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Button variant="ghost" onClick={handleClear}>
-              Clear board
-            </Button>
             <Button variant="primary" onClick={buyHint} disabled={buying || atHintLimit}>
               {buying
                 ? "Confirming"

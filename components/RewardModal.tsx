@@ -14,6 +14,8 @@ import { markCleared } from "@/lib/progress";
 import { useRouter } from "next/navigation";
 import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
 import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
+import { awardMilestonesForLevel } from "@/lib/award-badges";
+import { toast } from "sonner";
 
 export interface RewardModalProps {
   open: boolean;
@@ -86,6 +88,17 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
       setClaimTxHash(pending.hash);
       if (!isDaily) {
         await markCleared(account.address, level);
+        const badges = await awardMilestonesForLevel(account.address, level, {
+          signAndSubmitTransaction: async (payload) =>
+            signAndSubmitTransaction(payload as InputTransactionData),
+        });
+        if (badges.length > 0) {
+          toast.success(
+            badges.length === 1
+              ? `Badge unlocked: ${badges[0].name}`
+              : `${badges.length} badges unlocked`,
+          );
+        }
       }
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       goNext();

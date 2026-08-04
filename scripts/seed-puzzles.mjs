@@ -1,16 +1,19 @@
 /**
- * Generate curated puzzle blobs for levels 1–3 + today's daily, write them to
- * public/puzzles/ (same-origin mirror), and register levels 1–3 on-chain.
+ * Generate curated puzzle blobs for levels 1–20 + today's daily, write them to
+ * public/puzzles/ (same-origin mirror), and register campaign levels on-chain.
  *
  * Blob names and seeds match lib/fetcher.ts:
  *   name: shelby-sudoku-level-{n} | shelby-sudoku-daily-{YYYYMMDD}
  *   seed: fnv1a(`${level}-${YYYYMMDD}`)
  *
  * Usage (from repo root):
- *   node --experimental-strip-types scripts/seed-puzzles.mjs
+ *   node scripts/seed-puzzles.mjs
+ *   node scripts/seed-puzzles.mjs --daily-only
+ *   node scripts/seed-puzzles.mjs --levels 1,2,3
  *
  * Requires move/.aptos/config.yaml profile `sudoku` for registry txs.
- * Optional: NEXT_PUBLIC_SHELBY_API_KEY for a real Shelby upload attempt.
+ * Optional: NEXT_PUBLIC_SHELBY_API_KEY (or SHELBY_API_KEY) for Shelby upload.
+ * Shelby upload also needs APT + shelbyUSD on the deployer for gas/storage.
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -32,6 +35,33 @@ const OUT = join(ROOT, "public", "puzzles");
 
 const REWARD = 0.01;
 const HINT = 0.0005;
+
+const SHELBY_RPC = "https://api.shelbynet.shelby.xyz/shelby";
+const SHELBY_INDEXER =
+  "https://api.shelbynet.aptoslabs.com/nocode/v1/public/cmforrguw0042s601fn71f9l2/v1/graphql";
+
+function loadEnvFiles() {
+  for (const name of [".env.local", ".env"]) {
+    const p = join(ROOT, name);
+    if (!existsSync(p)) continue;
+    for (const line of readFileSync(p, "utf8").split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq < 0) continue;
+      const key = trimmed.slice(0, eq).trim();
+      if (!key || process.env[key] !== undefined) continue;
+      let val = trimmed.slice(eq + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      process.env[key] = val;
+    }
+  }
+}
 
 function todayUTC() {
   return new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -197,6 +227,18 @@ function loadDeployer() {
   return Account.fromPrivateKey({ privateKey: pk });
 }
 
+function parseLevels(argv) {
+  if (argv.includes("--daily-only")) return [0];
+  const idx = argv.indexOf("--levels");
+  if (idx >= 0 && argv[idx + 1]) {
+    return argv[idx + 1]
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n >= 0 && n <= 20);
+  }
+  return [...Array.from({ length: 20 }, (_, i) => i + 1), 0];
+}
+
 async function registerPuzzle(aptos, account, level, name, bytes) {
   // Pass raw bytes — a hex string would be UTF-8-encoded into the vector.
   const commitment = Array.from(bytes);
@@ -213,27 +255,67 @@ async function registerPuzzle(aptos, account, level, name, bytes) {
   return pending.hash;
 }
 
-async function tryShelbyUpload(accountAddr, name, bytes) {
-  const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY?.trim();
-  if (!apiKey || /YOUR_KEY|changeme|placeholder/i.test(apiKey)) {
-    console.warn("  shelby upload skipped: NEXT_PUBLIC_SHELBY_API_KEY is placeholder/missing");
+function shelbyApiKey() {
+  const raw = (
+    process.env.SHELBY_API_KEY ||
+    process.env.NEXT_PUBLIC_SHELBY_API_KEY ||
+    ""
+  ).trim();
+  if (!raw || /YOUR_KEY|changeme|placeholder/i.test(raw)) return null;
+  return raw;
+}
+
+async function tryShelbyUpload(account, name, bytes) {
+  const apiKey = shelbyApiKey();
+  if (!apiKey) {
+    console.warn("  shelby upload skipped: SHELBY_API_KEY / NEXT_PUBLIC_SHELBY_API_KEY missing");
     return false;
   }
   try {
     const mod = await import("@shelby-protocol/sdk/node");
-    const Client = mod.ShelbyBlobClient ?? mod.ShelbyClient;
+    const Client = mod.ShelbyNodeClient ?? mod.ShelbyClient;
     if (!Client) {
-      console.warn("  shelby upload skipped: no ShelbyBlobClient in node SDK");
+      console.warn("  shelby upload skipped: ShelbyNodeClient missing");
       return false;
     }
-    const client = new Client({ apiKey, network: "shelbynet" });
-    if (typeof client.upload === "function") {
-      await client.upload({ account: accountAddr, blobName: name, data: bytes });
-    } else if (typeof client.putBlob === "function") {
-      await client.putBlob({ account: accountAddr, blobName: name, bytes });
-    } else {
-      console.warn("  shelby upload skipped: client has no upload/putBlob");
+
+    // Prefer Network.SHELBYNET when the Aptos SDK exposes it; otherwise pin
+    // shelbynet RPC/indexer endpoints explicitly (needed on ts-sdk < 5).
+    const network =
+      Network.SHELBYNET ??
+      /** @type {typeof Network.TESTNET} */ ("shelbynet");
+    const client = new Client({
+      network,
+      apiKey,
+      rpc: { baseUrl: SHELBY_RPC, apiKey },
+      indexer: { baseUrl: SHELBY_INDEXER, apiKey },
+    });
+
+    const blobData = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const expirationMicros = (Date.now() + 1000 * 60 * 60 * 24 * 90) * 1000;
+
+    if (typeof client.upload !== "function") {
+      console.warn("  shelby upload skipped: client.upload missing");
       return false;
+    }
+
+    // Node SDK: { blobData, signer, blobName, expirationMicros }
+    // Some older wrappers accepted { account, data/bytes }.
+    try {
+      await client.upload({
+        blobData,
+        signer: account,
+        blobName: name,
+        expirationMicros,
+      });
+    } catch (firstErr) {
+      await client.upload({
+        account,
+        blobData,
+        blobName: name,
+        expirationMicros,
+      });
+      void firstErr;
     }
     console.log("  shelby upload ok");
     return true;
@@ -244,9 +326,11 @@ async function tryShelbyUpload(accountAddr, name, bytes) {
 }
 
 async function main() {
+  loadEnvFiles();
   const date = todayUTC();
+  const levels = parseLevels(process.argv.slice(2));
   mkdirSync(OUT, { recursive: true });
-  console.log(`date=${date} out=${OUT}`);
+  console.log(`date=${date} out=${OUT} levels=${levels.join(",")}`);
 
   const account = loadDeployer();
   const addr = account.accountAddress.toString();
@@ -254,7 +338,6 @@ async function main() {
 
   const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
-  const levels = [1, 2, 3, 0];
   for (const level of levels) {
     const { bytes, name } = buildLevel(level, date);
     const path = join(OUT, name);
@@ -263,7 +346,7 @@ async function main() {
     console.log(`\nlevel ${level}: ${name} (${bytes.length} bytes, sha256=${sha}…)`);
     console.log(`  wrote ${path}`);
 
-    await tryShelbyUpload(addr, name, bytes);
+    await tryShelbyUpload(account, name, bytes);
 
     if (level >= 1) {
       try {
@@ -277,38 +360,7 @@ async function main() {
     }
   }
 
-  // Sanity: registry table item for level 1
-  try {
-    const res = await fetch(
-      `https://api.testnet.aptoslabs.com/v1/accounts/${REG}/resource/${REG}::registry::Registry`,
-    );
-    const json = await res.json();
-    const handle = json.data?.puzzles?.handle;
-    if (handle) {
-      const item = await fetch(
-        `https://api.testnet.aptoslabs.com/v1/tables/${handle}/item`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            key_type: "u64",
-            value_type: `${REG}::registry::Puzzle`,
-            key: "1",
-          }),
-        },
-      );
-      if (item.ok) {
-        const puzzle = await item.json();
-        console.log("\nregistry level 1:", JSON.stringify(puzzle));
-      } else {
-        console.warn("\nregistry level 1 still missing after seed");
-      }
-    }
-  } catch (err) {
-    console.warn("registry verify failed", err);
-  }
-
-  console.log("\ndone. public/puzzles mirror is live; Shelby upload needs a real API key.");
+  console.log("\ndone.");
 }
 
 main().catch((e) => {

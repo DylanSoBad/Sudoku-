@@ -9,6 +9,7 @@ import {
   type BadgeDef,
 } from "@/lib/badges";
 import { buildMintBadgePayload } from "@/lib/contracts";
+import { waitForTxSuccess } from "@/lib/aptos";
 
 export interface BadgeAwardSigner {
   signAndSubmitTransaction: (payload: {
@@ -40,13 +41,12 @@ export async function awardMilestonesForLevel(
         const result = await signer.signAndSubmitTransaction({
           data: payload.data as unknown as Record<string, unknown>,
         });
+        await waitForTxSuccess(result.hash);
         txHash = result.hash;
         source = "chain";
       } catch (err) {
         console.warn("[shelby:fallback] nft_badge mint skipped", err, meta);
       }
-    } else {
-      console.warn("[shelby:fallback] badge recorded locally", def.id, meta);
     }
 
     const entry = recordBadge(address, def, { blobName, txHash, source });

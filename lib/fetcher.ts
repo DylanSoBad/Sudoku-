@@ -136,15 +136,28 @@ async function tierShelby(level: number, date: string): Promise<FetchedPuzzle | 
       const bytes = await withTimeout(
         (async () => {
           const mod = await import("@shelby-protocol/sdk/browser");
+          const { Network } = await import("@aptos-labs/ts-sdk");
           const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
-          const client = new mod.ShelbyBlobClient({
-            apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
-            network: "shelbynet",
+          const key =
+            apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined;
+          const client = new mod.ShelbyClient({
+            network: Network.SHELBYNET,
+            apiKey: key,
+            rpc: {
+              baseUrl: "https://api.shelbynet.shelby.xyz/shelby",
+              apiKey: key,
+            },
+            indexer: {
+              baseUrl:
+                "https://api.shelbynet.aptoslabs.com/nocode/v1/public/cmforrguw0042s601fn71f9l2/v1/graphql",
+              apiKey: key,
+            },
           });
-          const buf = await (client as unknown as {
-            download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
-          }).download({ account, blobName });
-          return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+          const blob = await client.download({ account, blobName });
+          const data =
+            (blob as { data?: Uint8Array | ArrayBuffer }).data ??
+            (blob as unknown as Uint8Array | ArrayBuffer);
+          return data instanceof Uint8Array ? data : new Uint8Array(data);
         })(),
         SHELBY_TIMEOUT_MS,
         `shelby download ${blobName}`,
