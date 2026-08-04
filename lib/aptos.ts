@@ -17,10 +17,11 @@
  *     c) fallback to a cached `NEXT_PUBLIC_SHELBYUSD_FA_METADATA` constant
  *   The resolved address is cached in-memory for the session.
  *
- *   Once metadata is known, the balance is read via the REST fullnode
- *   `/accounts/{addr}/resources` endpoint, scanning for a
- *   `0x1::primary_fungible_store::PrimaryFungibleStore` whose `metadata`
- *   field matches. Decimals are `NEXT_PUBLIC_SHELBY_USD_DECIMALS` (default 6).
+ *   Once metadata is known, the balance is read with the
+ *   `0x1::primary_fungible_store::balance` view. Note that a primary store is
+ *   an object at a derived address, not a resource on the owner account, so
+ *   scanning `/accounts/{addr}/resources` never finds it.
+ *   Decimals are `NEXT_PUBLIC_SHELBY_USD_DECIMALS` (default 8).
  *
  * - `waitForTxSuccess(hash)` polls `aptos.waitForTransaction` and throws on
  *   `success=false`. Returns the full committed transaction response.
@@ -59,11 +60,13 @@ function readShelbyUsdModule(): string {
   );
 }
 
+// shelbyUSD reports decimals=8 on testnet (verified against the FA metadata
+// object), so 8 is the fallback when the env var is absent or malformed.
 function readShelbyUsdDecimals(): number {
   const raw = process.env.NEXT_PUBLIC_SHELBY_USD_DECIMALS?.trim();
-  if (!raw) return 6;
+  if (!raw) return 8;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 && n <= 18 ? n : 6;
+  return Number.isFinite(n) && n >= 0 && n <= 18 ? n : 8;
 }
 
 function readFullnode(): string {
@@ -196,13 +199,10 @@ async function tryViewMetadataAddress(
         payload: { function: fn, typeArguments: [], functionArguments: [] },
       })) as unknown;
       if (!Array.isArray(out) || out.length === 0) return null;
-      const first = out[0] as unknown;
-      if (first && typeof first === "object" && "inner" in (first as Record<string, unknown>)) {
-        const inner = (first as { inner?: unknown }).inner;
-        if (typeof inner === "string" && inner.startsWith("0x")) return inner;
-      }
-      if (typeof first === "string" && first.startsWith("0x")) return first;
-      return null;
+      // `metadata()` returns Object<Metadata> (`{ inner }`), while
+      // `shelby_usd_address()` returns a bare address string.
+      const addr = unwrapStr(out[0]);
+      return addr && addr.startsWith("0x") ? addr : null;
     } catch {
       return null;
     }
@@ -235,6 +235,20 @@ async function resolveShelbyUsdMetadata(): Promise<string | null> {
   return cachedMetadataAddress;
 }
 
+/** Number of decimals shelbyUSD uses on the configured network. */
+export function shelbyUsdDecimals(): number {
+  return readShelbyUsdDecimals();
+}
+
+/**
+ * Convert a human shelbyUSD amount (e.g. 0.1) into the raw u64 the Move
+ * modules expect. Always derive raw amounts through this helper so a change of
+ * `NEXT_PUBLIC_SHELBY_USD_DECIMALS` cannot silently mis-scale a transfer.
+ */
+export function toRawShelbyUsd(amount: number): number {
+  return Math.round(amount * 10 ** readShelbyUsdDecimals());
+}
+
 /**
  * Resolve the shelbyUSD FA metadata object address, using the in-memory cache
  * when possible. Returns null if the module hasn't been published yet.
@@ -249,7 +263,6 @@ export async function shelbyUsdMetadataAddress(): Promise<string | null> {
  */
 export async function getShelbyUsdBalance(address: string): Promise<number> {
   const decimals = readShelbyUsdDecimals();
-  const fullnode = readFullnode();
 
   let metadata: string | null = cachedMetadataAddress;
   if (!metadata) {
@@ -258,27 +271,20 @@ export async function getShelbyUsdBalance(address: string): Promise<number> {
   if (!metadata) return 0;
 
   try {
-    const res = await fetch(`${fullnode}/accounts/${address}/resources`, {
-      headers: { "content-type": "application/json" },
-    });
-    if (!res.ok) return 0;
-    const body = (await res.json()) as Array<{ type: string; data?: unknown }>;
-    const metaLower = metadata.toLowerCase();
-    for (const r of body) {
-      if (!r.type) continue;
-      const isPrimary =
-        r.type === "0x1::primary_fungible_store::PrimaryFungibleStore" ||
-        r.type.endsWith("::primary_fungible_store::PrimaryFungibleStore");
-      if (!isPrimary) continue;
-      const metaInner = unwrapStr(r.data);
-      if (metaInner && metaInner.toLowerCase() === metaLower) {
-        const data = r.data as { balance?: string | number };
-        const raw = Number(data?.balance ?? 0);
-        return Number.isFinite(raw) ? raw / 10 ** decimals : 0;
-      }
-    }
-    return 0;
-  } catch {
+    const client = getAptosClient();
+    const out = (await client.view({
+      payload: {
+        function: "0x1::primary_fungible_store::balance",
+        typeArguments: ["0x1::fungible_asset::Metadata"],
+        functionArguments: [address, metadata],
+      },
+    })) as unknown;
+    const raw = Array.isArray(out) ? Number(out[0] ?? 0) : 0;
+    return Number.isFinite(raw) ? raw / 10 ** decimals : 0;
+  } catch (err) {
+    // A primary store that was never created reads as an abort, not zero, so
+    // treat any failure as an empty balance rather than surfacing it.
+    console.warn("[getShelbyUsdBalance]", err);
     return 0;
   }
 }

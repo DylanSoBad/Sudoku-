@@ -16,6 +16,7 @@ import {
 import { SEASON_PASS } from "@/lib/tokenomics";
 import { buildPurchaseSeasonPassPayload } from "@/lib/contracts";
 import { getAptosClient } from "@/lib/balances";
+import { toRawShelbyUsd } from "@/lib/aptos";
 import { useT } from "@/components/app-providers";
 
 export function SeasonPassCard() {
@@ -44,7 +45,7 @@ export function SeasonPassCard() {
       let source: "local" | "chain" = "local";
       try {
         const payload = buildPurchaseSeasonPassPayload({
-          priceMicro: Math.round(SEASON_PASS.priceShelbyUsd * 1_000_000),
+          priceMicro: toRawShelbyUsd(SEASON_PASS.priceShelbyUsd),
         });
         const pending = await signAndSubmitTransaction(payload);
         const aptos = getAptosClient();

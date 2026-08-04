@@ -11,13 +11,11 @@ import { RevenueSplitBar } from "@/components/revenue-split";
 import { SettingsPanel } from "@/components/settings-panel";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { ReadLedger } from "@/components/read-ledger";
-import { ToastProvider } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-shelby-bg text-shelby-fg-strong">
-      <ToastProvider />
       <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8">
         <section className="space-y-3">
           <p className="text-xs uppercase tracking-wider text-shelby-accent2">

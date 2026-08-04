@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { toast } from "sonner";
 import { SudokuBoard, type SudokuBoardHandle } from "./sudoku-board";
 import { Button } from "@/components/ui/button";
 import { RewardModal } from "./RewardModal";
 import { fetchPuzzle, type FetchedPuzzle } from "@/lib/fetcher";
 import { recordRead } from "./ReadLedger";
 import { findEmpty, isSolved as checkSolved } from "@/lib/sudoku";
-import { loadPrefs, effectiveHintCost } from "@/lib/preferences";
+import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
+import { explorerTxUrl } from "@/lib/utils";
 import { economicsForLevel, DAILY_BONUS_MULT } from "@/lib/tokenomics";
 import { markCleared } from "@/lib/progress";
 import { recordRun } from "@/lib/leaderboard";
@@ -30,13 +32,15 @@ export interface PlayLevelPageProps {
 export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const params = useParams<{ level?: string; n?: string }>();
   const router = useRouter();
-  const { account } = useWallet();
+  const { account, signAndSubmitTransaction } = useWallet();
   const raw = levelProp !== undefined ? String(levelProp) : (params?.level ?? params?.n ?? "1");
   const level = Math.max(1, Number(raw) || 1);
+  const registry = registryAddress();
 
   const [puzzle, setPuzzle] = useState<FetchedPuzzle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hintCount, setHintCount] = useState(0);
+  const [buying, setBuying] = useState(false);
   const [rewardOpen, setRewardOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [isSolved, setIsSolved] = useState(false);
@@ -85,25 +89,50 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     }
   }, [account?.address, level]);
 
-  const buyHint = () => {
-    if (!puzzle) return;
-    const econ = economicsForLevel(level);
-    const prefs = loadPrefs();
-    const cost = effectiveHintCost(econ.hintCost, prefs);
+  const buyHint = useCallback(async () => {
+    if (!puzzle || buying) return;
     if (!account?.address) {
       setError("Connect wallet to buy hints");
       return;
     }
-    // Hint cost is settled on-chain via hint_shop::buy_hint; the actual
-    // payment is debited by the Move package once `NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS`
-    // is configured. Until then the UI lets you tap a local hint and we just
-    // ask the wallet hook to refresh from chain.
-    window.dispatchEvent(new CustomEvent("shelby:balances"));
+    if (!registry) {
+      setError("NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is not set");
+      return;
+    }
     const emptyIdx = findEmpty(boardRef.current?.getBoard() ?? []);
     if (emptyIdx < 0) return;
-    boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);
-    setHintCount((n) => n + 1);
-  };
+
+    setBuying(true);
+    setError(null);
+    try {
+      const pending = await signAndSubmitTransaction({
+        data: {
+          function: `${registry}::hint_shop::buy_hint`,
+          typeArguments: [],
+          functionArguments: [level],
+        },
+      });
+      await waitForTxSuccess(pending.hash);
+      // Only reveal after the transfer commits, so a rejected or aborted
+      // transaction never yields a free hint.
+      boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);
+      setHintCount((n) => n + 1);
+      window.dispatchEvent(new CustomEvent("shelby:balances"));
+      toast.success("Hint purchased", {
+        description: "View transaction on explorer",
+        action: {
+          label: "Explorer",
+          onClick: () => window.open(explorerTxUrl(pending.hash), "_blank"),
+        },
+      });
+    } catch (e) {
+      const msg = (e as Error).message ?? "Hint purchase failed";
+      setError(msg);
+      toast.error("Hint purchase failed", { description: msg });
+    } finally {
+      setBuying(false);
+    }
+  }, [puzzle, buying, account?.address, level, registry, signAndSubmitTransaction]);
 
   const handleDigit = (d: number) => {
     boardRef.current?.setDigit(d);
@@ -181,8 +210,10 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
             onSolve={onSolve}
           />
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={buyHint}>
-              Buy hint ({economicsForLevel(level).hintCost.toFixed(2)} sUSD)
+            <Button variant="secondary" onClick={buyHint} disabled={buying}>
+              {buying
+                ? "Confirming…"
+                : `Buy hint (${economicsForLevel(level).hintCost.toFixed(2)} sUSD)`}
             </Button>
             <Button variant="ghost" onClick={handleClear}>Clear</Button>
             {locked && (

@@ -1,11 +1,12 @@
 /// Hint shop: charges a player shelbyUSD (FA) to reveal one cell.
 ///
-/// Per-level pricing (raw sUSD, 6 decimals), keyed by difficulty tier:
-///   easy   = 100_000
-///   medium = 200_000
-///   hard   = 400_000
-///   expert = 700_000
-///   master = 1_000_000
+/// Per-level pricing, keyed by difficulty tier. shelbyUSD has **8** decimals
+/// on testnet (verified against the FA metadata object), so 1 sUSD = 1e8 raw:
+///   easy   = 0.1 sUSD =  10_000_000
+///   medium = 0.2 sUSD =  20_000_000
+///   hard   = 0.4 sUSD =  40_000_000
+///   expert = 0.7 sUSD =  70_000_000
+///   master = 1.0 sUSD = 100_000_000
 ///
 /// buy_hint transfers the per-level amount from the buyer's primary FA store
 /// to the treasury address stored at module init time.
@@ -36,13 +37,13 @@ module sudoku::hint_shop {
         move_to(admin, Shop { treasury });
     }
 
-    /// Per-level hint price, raw sUSD (6 decimals).
+    /// Per-level hint price, raw sUSD (8 decimals).
     public fun price_for(level: u64): u64 {
-        if (level <= 3) 100_000
-        else if (level <= 6) 200_000
-        else if (level <= 10) 400_000
-        else if (level <= 14) 700_000
-        else 1_000_000
+        if (level <= 3) 10_000_000
+        else if (level <= 6) 20_000_000
+        else if (level <= 10) 40_000_000
+        else if (level <= 14) 70_000_000
+        else 100_000_000
     }
 
     /// Resolve the shelbyUSD FA metadata object address. Hard-coded from the

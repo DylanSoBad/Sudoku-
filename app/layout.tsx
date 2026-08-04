@@ -4,6 +4,7 @@ import "./globals.css";
 import { WalletProvider } from "@/components/wallet-provider";
 import { AppProviders } from "@/components/app-providers";
 import { Header } from "@/components/Header";
+import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Sudoku on Shelby",
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <AppProviders>
             <Header />
             {children}
+            <ToastProvider />
           </AppProviders>
         </WalletProvider>
       </body>

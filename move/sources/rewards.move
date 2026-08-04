@@ -1,11 +1,12 @@
 /// Rewards module: pays out shelbyUSD (FA) from a treasury on level clear.
 ///
-/// Per-level reward amounts (raw sUSD, 6 decimals):
-///   easy   = 500_000
-///   medium = 1_000_000
-///   hard   = 2_500_000
-///   expert = 5_000_000
-///   master = 10_000_000
+/// Per-level reward amounts. shelbyUSD has **8** decimals on testnet, so
+/// 1 sUSD = 1e8 raw:
+///   easy   =  0.5 sUSD =    50_000_000
+///   medium =  1.0 sUSD =   100_000_000
+///   hard   =  2.5 sUSD =   250_000_000
+///   expert =  5.0 sUSD =   500_000_000
+///   master = 10.0 sUSD = 1_000_000_000
 ///
 /// The module creates a `SignerCap` at `init` time so it can move funds
 /// out of a resource account without prompting the deployer on every
@@ -17,7 +18,7 @@ module sudoku::rewards {
     use aptos_framework::fungible_asset::Metadata;
     use aptos_framework::object::{Self, Object};
     use aptos_framework::primary_fungible_store;
-    use aptos_framework::signer;
+    use std::signer;
     use aptos_std::table::{Self, Table};
 
     // FA metadata object address for shelbyUSD on testnet (mirror of the
@@ -43,12 +44,13 @@ module sudoku::rewards {
         move_to(admin, Rewards { treasury_signer_cap: cap, claimed });
     }
 
+    /// Per-level reward, raw sUSD (8 decimals).
     public fun reward_for(level: u64): u64 {
-        if (level <= 3) 500_000
-        else if (level <= 6) 1_000_000
-        else if (level <= 10) 2_500_000
-        else if (level <= 14) 5_000_000
-        else 10_000_000
+        if (level <= 3) 50_000_000
+        else if (level <= 6) 100_000_000
+        else if (level <= 10) 250_000_000
+        else if (level <= 14) 500_000_000
+        else 1_000_000_000
     }
 
     public fun shelby_usd_metadata(): Object<Metadata> {

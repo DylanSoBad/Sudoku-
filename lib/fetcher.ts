@@ -30,6 +30,19 @@ function todayUTC(): string {
   return d.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
+/**
+ * Account that owns the puzzle blobs on Shelby. The curator uploads under its
+ * own wallet address, which in the documented deployment is the same account
+ * that published the Move package.
+ */
+function curatorAccount(): string {
+  return (
+    process.env.NEXT_PUBLIC_CURATOR_ADDRESS?.trim() ||
+    process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim() ||
+    ""
+  );
+}
+
 function fallback(level: number): FetchedPuzzle {
   const econ = economicsForLevel(level);
   const diff = difficultyForLevel(level);
@@ -50,6 +63,36 @@ export async function fetchPuzzle(level: number): Promise<FetchedPuzzle> {
   const date = todayUTC();
   const blobName = dailyBlobName(level, date);
 
+  // 1) Shelby. Attempted before the cache so a locally generated puzzle can
+  //    never permanently shadow a real blob published by the curator.
+  const account = curatorAccount();
+  if (account) {
+    try {
+      const mod = await import("@shelby-protocol/sdk/browser");
+      const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
+      const client = new mod.ShelbyBlobClient({
+        apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
+        network: "shelbynet",
+      });
+      const buf = await (client as unknown as {
+        download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
+      }).download({ account, blobName });
+      const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      const blob = decodePuzzleBlob(bytes);
+      if (typeof window !== "undefined") {
+        const b64 = btoa(String.fromCharCode(...bytes));
+        localStorage.setItem(cacheKey(level, date), b64);
+      }
+      return { ...blob, source: "shelby" };
+    } catch (err) {
+      console.debug("[shelby:fallback]", err);
+    }
+  } else {
+    console.debug(
+      "[shelby:fallback] no curator account configured (set NEXT_PUBLIC_CURATOR_ADDRESS)",
+    );
+  }
+
   // 2) localStorage cache
   if (typeof window !== "undefined") {
     const cached = localStorage.getItem(cacheKey(level, date));
@@ -62,31 +105,6 @@ export async function fetchPuzzle(level: number): Promise<FetchedPuzzle> {
         localStorage.removeItem(cacheKey(level, date));
       }
     }
-  }
-
-  // 1) Shelby
-  try {
-    const mod = await import("@shelby-protocol/sdk/browser");
-    const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
-    const client = new mod.ShelbyBlobClient({
-      apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
-      network: "shelbynet",
-    });
-    const buf = await (client as unknown as {
-      download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
-    }).download({
-      account: "sudoku-curator",
-      blobName,
-    });
-    const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-    const blob = decodePuzzleBlob(bytes);
-    if (typeof window !== "undefined") {
-      const b64 = btoa(String.fromCharCode(...bytes));
-      localStorage.setItem(cacheKey(level, date), b64);
-    }
-    return { ...blob, source: "shelby" };
-  } catch (err) {
-    console.debug("[shelby:fallback]", err);
   }
 
   // 3) deterministic generator

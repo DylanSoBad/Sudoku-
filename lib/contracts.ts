@@ -1,4 +1,6 @@
 import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
+import { toRawShelbyUsd } from "@/lib/aptos";
+import { SEASON_PASS } from "@/lib/tokenomics";
 
 function registryAddress(): string {
   const addr = process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim();
@@ -22,69 +24,46 @@ function toHexBytes(input: string | Uint8Array): string {
     .join("")}`;
 }
 
-export interface OpenSessionArgs {
-  level: number;
-  sessionId: string;
-  /** Stub block height (client may pass 0). */
-  blockHeight?: number;
-}
-
-/** Build wallet-adapter payload for sudoku::rewards::open_session */
-export function buildOpenSessionPayload(args: OpenSessionArgs): InputTransactionData {
-  const mod = registryAddress();
-  return {
-    data: {
-      function: `${mod}::rewards::open_session`,
-      typeArguments: [],
-      functionArguments: [
-        args.level,
-        toHexBytes(args.sessionId),
-        args.blockHeight ?? 0,
-      ],
-    },
-  };
-}
-
 export interface BuyHintArgs {
   level: number;
-  sessionId: string;
-  priceShelbyUSDMicro: number;
+  /** Unused: `hint_shop::buy_hint` derives the price on-chain from `level`. */
+  sessionId?: string;
+  /** Unused: `hint_shop::buy_hint` derives the price on-chain from `level`. */
+  priceShelbyUSDMicro?: number;
 }
 
-/** Build wallet-adapter payload for sudoku::hint_shop::buy_hint */
+/** Build wallet-adapter payload for `hint_shop::buy_hint(level: u64)`. */
 export function buildBuyHintPayload(args: BuyHintArgs): InputTransactionData {
   const mod = registryAddress();
   return {
     data: {
       function: `${mod}::hint_shop::buy_hint`,
       typeArguments: [],
-      functionArguments: [args.level, toHexBytes(args.sessionId)],
+      functionArguments: [args.level],
     },
   };
 }
 
 export interface ClaimRewardArgs {
   level: number;
-  sessionId: string;
-  solutionMerkle: string;
+  /** Unused: `rewards::claim` keys the payout table by (signer, level). */
+  sessionId?: string;
+  /** Unused: the reward amount is fixed on-chain by `reward_for(level)`. */
+  solutionMerkle?: string;
+  /** Unused on-chain; kept for local leaderboard bookkeeping. */
   timeMs?: number;
+  /** Unused on-chain; kept for local leaderboard bookkeeping. */
   hintsUsed?: number;
 }
 
-/** Build wallet-adapter payload for sudoku::rewards::claim */
+/** Build wallet-adapter payload for `rewards::claim(level: u64)`. */
 export function buildClaimRewardPayload(args: ClaimRewardArgs): InputTransactionData {
   const mod = registryAddress();
   return {
     data: {
       function: `${mod}::rewards::claim`,
       typeArguments: [],
-      functionArguments: [
-        args.level,
-        toHexBytes(args.sessionId),
-        toHexBytes(args.solutionMerkle),
-        args.timeMs ?? 0,
-        args.hintsUsed ?? 0,
-      ],
+      functionArguments: [args.level],
     },
   };
 }
@@ -92,16 +71,27 @@ export function buildClaimRewardPayload(args: ClaimRewardArgs): InputTransaction
 export interface RegisterPuzzleArgs {
   level: number;
   blobName: string;
+  /** Merkle root / hash committing to the blob contents. */
+  commitment?: Uint8Array | string;
 }
 
-/** Build wallet-adapter payload for sudoku::registry::register_puzzle */
+/**
+ * Build wallet-adapter payload for
+ * `registry::register_puzzle(level: u64, blob_name: String, commitment: vector<u8>)`.
+ * `blob_name` is a Move `String`, so it is passed as a plain UTF-8 string
+ * rather than hex-encoded bytes.
+ */
 export function buildRegisterPuzzlePayload(args: RegisterPuzzleArgs): InputTransactionData {
   const mod = registryAddress();
   return {
     data: {
       function: `${mod}::registry::register_puzzle`,
       typeArguments: [],
-      functionArguments: [args.level, toHexBytes(args.blobName)],
+      functionArguments: [
+        args.level,
+        args.blobName,
+        toHexBytes(args.commitment ?? new Uint8Array()),
+      ],
     },
   };
 }
@@ -129,7 +119,10 @@ export function buildMintBadgePayload(args: MintBadgeArgs): InputTransactionData
 }
 
 export interface PurchaseSeasonPassArgs {
-  /** Price in micro-shelbyUSD (6 decimals). */
+  /**
+   * Price in raw shelbyUSD units. Build it with `toRawShelbyUsd()` so the
+   * scale follows `NEXT_PUBLIC_SHELBY_USD_DECIMALS` (8 on testnet).
+   */
   priceMicro?: number;
 }
 
@@ -142,7 +135,9 @@ export function buildPurchaseSeasonPassPayload(
     data: {
       function: `${mod}::season_pass::purchase`,
       typeArguments: [],
-      functionArguments: [args.priceMicro ?? 5_000_000],
+      functionArguments: [
+        args.priceMicro ?? toRawShelbyUsd(SEASON_PASS.priceShelbyUsd),
+      ],
     },
   };
 }
