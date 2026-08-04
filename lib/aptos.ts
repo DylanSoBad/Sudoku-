@@ -291,8 +291,17 @@ export async function getShelbyUsdBalance(address: string): Promise<number> {
 
 // ─── Move registry helpers ────────────────────────────────────────────────
 
+/**
+ * Deployer address that published SudokuShelby on Aptos testnet (2026-08-04).
+ * Baked in so a Vercel build that fails to inline NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS
+ * cannot silently flip the client into offline mode (chain: off / free hints).
+ */
+const DEFAULT_REGISTRY_ADDRESS =
+  "0x071a8a3d2ca013623dba02737a3824d898756eddad5f991aa55d2155c45fa20a";
+
 export function registryAddress(): string {
-  return (process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS ?? "").trim();
+  const fromEnv = (process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS ?? "").trim();
+  return fromEnv || DEFAULT_REGISTRY_ADDRESS;
 }
 
 export function registryConfigured(): boolean {

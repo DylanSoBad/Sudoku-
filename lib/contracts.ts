@@ -2,13 +2,12 @@ import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
 import { toRawShelbyUsd } from "@/lib/aptos";
 import { SEASON_PASS } from "@/lib/tokenomics";
 
+const DEFAULT_REGISTRY_ADDRESS =
+  "0x071a8a3d2ca013623dba02737a3824d898756eddad5f991aa55d2155c45fa20a";
+
 function registryAddress(): string {
-  const addr = process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim();
-  if (!addr) {
-    throw new Error(
-      "NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is empty. Deploy the Move package under move/ first, then set the published module address in .env.local.",
-    );
-  }
+  const addr =
+    process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim() || DEFAULT_REGISTRY_ADDRESS;
   return addr;
 }
 

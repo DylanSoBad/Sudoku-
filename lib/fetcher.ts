@@ -57,11 +57,14 @@ function todayUTC(): string {
  * own wallet address, which in the documented deployment is the same account
  * that published the Move package.
  */
+const DEFAULT_CURATOR =
+  "0x071a8a3d2ca013623dba02737a3824d898756eddad5f991aa55d2155c45fa20a";
+
 function curatorAccount(): string {
   return (
     process.env.NEXT_PUBLIC_CURATOR_ADDRESS?.trim() ||
     process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim() ||
-    ""
+    DEFAULT_CURATOR
   );
 }
 

@@ -49,9 +49,13 @@ export function difficultyForLevel(level: number): Difficulty {
   return economicsForLevel(level).difficulty;
 }
 
+/** Same deployer as lib/aptos.ts — keep in sync if the package is re-published. */
+const DEFAULT_REGISTRY_ADDRESS =
+  "0x071a8a3d2ca013623dba02737a3824d898756eddad5f991aa55d2155c45fa20a";
+
 export function registryAddress(): string {
-  const addr = process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS ?? "";
-  return addr.trim();
+  const addr = (process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS ?? "").trim();
+  return addr || DEFAULT_REGISTRY_ADDRESS;
 }
 
 export function registryConfigured(): boolean {
