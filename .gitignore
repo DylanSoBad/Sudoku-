@@ -13,3 +13,7 @@ out
 coverage
 dist
 tsconfig.tsbuildinfo
+
+# Aptos CLI profiles hold deployer private keys
+.aptos/
+move/build/

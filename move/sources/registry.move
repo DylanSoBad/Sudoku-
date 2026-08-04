@@ -4,7 +4,11 @@
 module sudoku::registry {
     use aptos_framework::event;
     use aptos_std::table::{Self, Table};
+    use std::signer;
     use std::string::String;
+
+    /// Caller is not the account that published the package.
+    const E_NOT_ADMIN: u64 = 1;
 
     struct Puzzle has key, store, copy, drop {
         level: u64,
@@ -29,6 +33,7 @@ module sudoku::registry {
         blob_name: String,
         commitment: vector<u8>,
     ) acquires Registry {
+        assert!(signer::address_of(admin) == @sudoku, E_NOT_ADMIN);
         let r = borrow_global_mut<Registry>(@sudoku);
         if (table::contains(&r.puzzles, level)) {
             table::remove(&mut r.puzzles, level);

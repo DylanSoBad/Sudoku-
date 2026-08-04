@@ -1,28 +1,47 @@
 /**
- * Tokenomics table — single source of truth for level difficulty / empties /
- * hint price / reward. Mirrors the README table.
+ * Tokenomics — flat model sized to fit shelbyUSD faucet limits.
+ *
+ * Every level pays the same reward and charges the same hint price, and a
+ * player may buy at most `MAX_HINTS_PER_LEVEL` hints on a given level.
+ *
+ * Raw values are the u64 amounts the Move modules move on-chain. shelbyUSD
+ * reports 8 decimals on testnet (verified against the FA metadata object), so
+ * 1 sUSD = 1e8 raw. Keep the raw constants in sync with `hint_shop.move` and
+ * `rewards.move`.
  */
 import type { Difficulty } from "./sudoku";
 
+export const REWARD_PER_LEVEL_SUSD = 0.01;
+export const HINT_COST_SUSD = 0.0005;
+export const MAX_HINTS_PER_LEVEL = 5;
+
+export const REWARD_PER_LEVEL_RAW = 1_000_000;
+export const HINT_COST_RAW = 50_000;
+
+/** Display labels, kept here so UI copy cannot drift from the constants. */
+export const REWARD_LABEL = `${REWARD_PER_LEVEL_SUSD} sUSD`;
+export const HINT_COST_LABEL = `${HINT_COST_SUSD} sUSD`;
+
+/** Difficulty and grid shape per level — unchanged by the flat pricing. */
 export interface LevelEconomics {
   difficulty: Difficulty;
   empties: number;
-  hintCost: number; // shelbyUSD
-  reward: number;   // shelbyUSD
 }
 
-const TABLE: ReadonlyArray<{ max: number; econ: LevelEconomics }> = [
-  { max: 3,  econ: { difficulty: "easy",   empties: 36, hintCost: 0.1, reward: 0.5  } },
-  { max: 6,  econ: { difficulty: "medium", empties: 44, hintCost: 0.2, reward: 1.0  } },
-  { max: 10, econ: { difficulty: "hard",   empties: 50, hintCost: 0.4, reward: 2.5  } },
-  { max: 14, econ: { difficulty: "expert", empties: 55, hintCost: 0.7, reward: 5.0  } },
-  { max: Infinity, econ: { difficulty: "master", empties: 60, hintCost: 1.0, reward: 10.0 } },
+const DIFFICULTY_TABLE: ReadonlyArray<{ max: number; econ: LevelEconomics }> = [
+  { max: 3, econ: { difficulty: "easy", empties: 36 } },
+  { max: 6, econ: { difficulty: "medium", empties: 44 } },
+  { max: 10, econ: { difficulty: "hard", empties: 50 } },
+  { max: 14, econ: { difficulty: "expert", empties: 55 } },
+  { max: Infinity, econ: { difficulty: "master", empties: 60 } },
 ];
 
 export const MAX_LEVEL = 20;
 
 export function economicsForLevel(level: number): LevelEconomics {
-  const row = TABLE.find((r) => level <= r.max) ?? TABLE[TABLE.length - 1];
+  const row =
+    DIFFICULTY_TABLE.find((r) => level <= r.max) ??
+    DIFFICULTY_TABLE[DIFFICULTY_TABLE.length - 1];
   return row.econ;
 }
 
@@ -37,14 +56,6 @@ export function registryAddress(): string {
 
 export function registryConfigured(): boolean {
   return registryAddress().length > 0;
-}
-
-export function hintCostFor(level: number): number {
-  return economicsForLevel(level).hintCost;
-}
-
-export function rewardFor(level: number): number {
-  return economicsForLevel(level).reward;
 }
 
 // ── Tokenomics extensions used by the marketing/UI surfaces ──────────────────

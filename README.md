@@ -64,13 +64,17 @@ After publish:
 
 ## Tokenomics
 
-| Levels | Difficulty | Empty | Hint (sUSD) | Reward (sUSD) |
-| ------ | ---------- | ----- | ----------- | ------------- |
-| 1–3    | easy       | 36    | 0.1         | 0.5           |
-| 4–6    | medium     | 44    | 0.2         | 1.0           |
-| 7–10   | hard       | 50    | 0.4         | 2.5           |
-| 11–14  | expert     | 55    | 0.7         | 5.0           |
-| 15+    | master     | 60    | 1.0         | 10.0          |
+| Item                | Value            |
+| ------------------- | ---------------- |
+| Reward per level    | 0.01 sUSD (flat) |
+| Hint cost           | 0.0005 sUSD      |
+| Max hints per level | 5                |
+
+Difficulty still scales with the level (36/44/50/55/60 empty cells for
+easy/medium/hard/expert/master); only the pricing is flat.
+
+shelbyUSD reports **8 decimals** on testnet, so the on-chain raw amounts are
+`1_000_000` for a reward and `50_000` for a hint.
 
 ## Architecture notes
 

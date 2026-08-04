@@ -6,7 +6,11 @@
  * 3) Deterministic generator (logged as `[shelby:fallback]`).
  */
 import { decodePuzzleBlob, encodePuzzleBlob, type PuzzleBlob } from "./blob-layout";
-import { difficultyForLevel, economicsForLevel } from "./tokenomics";
+import {
+  difficultyForLevel,
+  HINT_COST_SUSD,
+  REWARD_PER_LEVEL_SUSD,
+} from "./tokenomics";
 import { fnv1a, generatePuzzle } from "./sudoku";
 
 const CACHE_PREFIX = "shelby-sudoku-cache:";
@@ -44,14 +48,13 @@ function curatorAccount(): string {
 }
 
 function fallback(level: number): FetchedPuzzle {
-  const econ = economicsForLevel(level);
   const diff = difficultyForLevel(level);
   const { puzzle, solution } = generatePuzzle(level, fnv1a(level + "-" + todayUTC()));
   return {
     level,
     difficulty: diff,
-    hintCost: econ.hintCost,
-    reward: econ.reward,
+    hintCost: HINT_COST_SUSD,
+    reward: REWARD_PER_LEVEL_SUSD,
     puzzle,
     solution,
     ts: Date.now(),

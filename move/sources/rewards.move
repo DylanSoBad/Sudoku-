@@ -1,12 +1,8 @@
 /// Rewards module: pays out shelbyUSD (FA) from a treasury on level clear.
 ///
-/// Per-level reward amounts. shelbyUSD has **8** decimals on testnet, so
-/// 1 sUSD = 1e8 raw:
-///   easy   =  0.5 sUSD =    50_000_000
-///   medium =  1.0 sUSD =   100_000_000
-///   hard   =  2.5 sUSD =   250_000_000
-///   expert =  5.0 sUSD =   500_000_000
-///   master = 10.0 sUSD = 1_000_000_000
+/// Flat reward for clearing any level, sized to fit shelbyUSD faucet limits.
+/// shelbyUSD has **8** decimals on testnet, so 1 sUSD = 1e8 raw:
+///   reward = 0.01 sUSD = 1_000_000 raw
 ///
 /// The module creates a `SignerCap` at `init` time so it can move funds
 /// out of a resource account without prompting the deployer on every
@@ -26,6 +22,9 @@ module sudoku::rewards {
     //   aptos move view --function-id 0x249f5c642a63885ff88a5113b3ba0079840af5a1357706f8c7f3bfc5dd12511f::shelby_usd::metadata --network testnet
     const HARDCODED_SHELBY_USD_METADATA: address = @0x1b18363a9f1fe5e6ebf247daba5cc1c18052bb232efdc4c50f556053922d98e1;
 
+    /// Flat reward in raw sUSD (8 decimals) = 0.01 sUSD.
+    const REWARD_RAW: u64 = 1_000_000;
+
     struct Rewards has key {
         treasury_signer_cap: account::SignerCapability,
         claimed: Table<address, Table<u64, bool>>,
@@ -44,13 +43,9 @@ module sudoku::rewards {
         move_to(admin, Rewards { treasury_signer_cap: cap, claimed });
     }
 
-    /// Per-level reward, raw sUSD (8 decimals).
-    public fun reward_for(level: u64): u64 {
-        if (level <= 3) 50_000_000
-        else if (level <= 6) 100_000_000
-        else if (level <= 10) 250_000_000
-        else if (level <= 14) 500_000_000
-        else 1_000_000_000
+    /// Flat per-level reward, raw sUSD (8 decimals).
+    public fun reward_for(_level: u64): u64 {
+        REWARD_RAW
     }
 
     public fun shelby_usd_metadata(): Object<Metadata> {

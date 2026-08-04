@@ -9,6 +9,7 @@ export type Board = number[];
 export const EMPTY = 0;
 
 import type { PuzzleBlob } from "./codec.ts";
+import { HINT_COST_SUSD, REWARD_PER_LEVEL_SUSD } from "./tokenomics.ts";
 
 // Re-export codec surface so callers can import from "./sudoku" too.
 export { encodePuzzleBlob, decodePuzzleBlob, parsePuzzleBlobText } from "./codec.ts";
@@ -401,8 +402,9 @@ export function getLevelMeta(level: number): PuzzleMeta {
     level,
     difficulty: level <= 3 ? "easy" : level <= 6 ? "medium" : level <= 10 ? "hard" : level <= 14 ? "expert" : "master",
     empties,
-    hintCost: 0,
-    reward: 0,
+    hintCost: HINT_COST_SUSD,
+    hintPrice: HINT_COST_SUSD,
+    reward: REWARD_PER_LEVEL_SUSD,
   };
 }
 

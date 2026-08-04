@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { decodePuzzleBlob, type PuzzleBlob } from "@/lib/codec";
-import { difficultyForLevel, economicsForLevel } from "@/lib/tokenomics";
+import {
+  difficultyForLevel,
+  economicsForLevel,
+  HINT_COST_SUSD,
+  REWARD_PER_LEVEL_SUSD,
+} from "@/lib/tokenomics";
 import {
   fnv1a,
   generateFullSolution,
@@ -76,8 +81,8 @@ function generateBlob(level: number): PuzzleBlob {
   return {
     level,
     difficulty: difficultyForLevel(level),
-    hintCost: econ.hintCost,
-    reward: econ.reward,
+    hintCost: HINT_COST_SUSD,
+    reward: REWARD_PER_LEVEL_SUSD,
     puzzle,
     solution,
     ts: Date.now(),
