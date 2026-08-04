@@ -1,9 +1,15 @@
 /**
  * fetchPuzzle: load puzzle data for a level with three-tier fallback.
  *
- * 1) Try Shelby download (`@shelby-protocol/sdk/browser`).
+ * 1) Shelby download (`@shelby-protocol/sdk/browser`), hard-capped at
+ *    SHELBY_TIMEOUT_MS. Needs a curator address; every other tier does not.
  * 2) localStorage cache (so reopening a level is instant + counts as a read).
- * 3) Deterministic generator (logged as `[shelby:fallback]`).
+ * 3) Deterministic generator (mulberry32 seeded from FNV-1a of the level).
+ *
+ * Each tier swallows its own failures and returns null so the cascade always
+ * reaches tier 3. `fetchPuzzle` therefore resolves on every path and never
+ * rejects or stays pending — a stalled Shelby request used to hang the level
+ * page on "Loading puzzle" indefinitely.
  */
 import { decodePuzzleBlob, encodePuzzleBlob, type PuzzleBlob } from "./blob-layout";
 import {
@@ -12,8 +18,20 @@ import {
   REWARD_PER_LEVEL_SUSD,
 } from "./tokenomics";
 import { fnv1a, generatePuzzle } from "./sudoku";
+import { withTimeout } from "./utils";
 
 const CACHE_PREFIX = "shelby-sudoku-cache:";
+
+/** Tier 1 gets this long to settle before the cascade moves on. */
+export const SHELBY_TIMEOUT_MS = 4_000;
+
+/**
+ * Blobs whose Shelby fetch already failed in this session. Without this, every
+ * navigation re-pays the full timeout before falling through, so a level page
+ * would sit on "Loading puzzle" for four seconds each time Shelby is
+ * unreachable. Module-scoped, so a page reload retries from scratch.
+ */
+const shelbyMisses = new Set<string>();
 
 export interface FetchedPuzzle extends PuzzleBlob {
   source: "shelby" | "cache" | "generated";
@@ -47,7 +65,27 @@ function curatorAccount(): string {
   );
 }
 
-function fallback(level: number): FetchedPuzzle {
+function toBase64(bytes: Uint8Array): string {
+  // Chunked so a large blob cannot blow the call stack via argument spread.
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function writeCache(level: number, date: string, bytes: Uint8Array): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(cacheKey(level, date), toBase64(bytes));
+  } catch {
+    /* quota or private-mode storage denial is not fatal */
+  }
+}
+
+/**
+ * Deterministic puzzle for `level`. Pure and synchronous, so it is always a
+ * safe terminal tier — also exported for the level page watchdog.
+ */
+export function generateFallbackPuzzle(level: number): FetchedPuzzle {
   const diff = difficultyForLevel(level);
   const { puzzle, solution } = generatePuzzle(level, fnv1a(level + "-" + todayUTC()));
   return {
@@ -62,60 +100,97 @@ function fallback(level: number): FetchedPuzzle {
   };
 }
 
-export async function fetchPuzzle(level: number): Promise<FetchedPuzzle> {
-  const date = todayUTC();
-  const blobName = dailyBlobName(level, date);
+/** Tier 1. Only this tier needs an account; returns null instead of throwing. */
+async function tierShelby(level: number, date: string): Promise<FetchedPuzzle | null> {
+  if (typeof window === "undefined") return null;
 
-  // 1) Shelby. Attempted before the cache so a locally generated puzzle can
-  //    never permanently shadow a real blob published by the curator.
   const account = curatorAccount();
-  if (account) {
-    try {
-      const mod = await import("@shelby-protocol/sdk/browser");
-      const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
-      const client = new mod.ShelbyBlobClient({
-        apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
-        network: "shelbynet",
-      });
-      const buf = await (client as unknown as {
-        download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
-      }).download({ account, blobName });
-      const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-      const blob = decodePuzzleBlob(bytes);
-      if (typeof window !== "undefined") {
-        const b64 = btoa(String.fromCharCode(...bytes));
-        localStorage.setItem(cacheKey(level, date), b64);
-      }
-      return { ...blob, source: "shelby" };
-    } catch (err) {
-      console.debug("[shelby:fallback]", err);
-    }
-  } else {
-    console.debug(
-      "[shelby:fallback] no curator account configured (set NEXT_PUBLIC_CURATOR_ADDRESS)",
+  if (!account) {
+    console.warn(
+      "[shelby:fallback]",
+      "no curator account configured (set NEXT_PUBLIC_CURATOR_ADDRESS)",
     );
+    return null;
   }
 
-  // 2) localStorage cache
-  if (typeof window !== "undefined") {
-    const cached = localStorage.getItem(cacheKey(level, date));
-    if (cached) {
-      try {
-        const buf = Uint8Array.from(atob(cached), (c) => c.charCodeAt(0));
-        const blob = decodePuzzleBlob(buf);
-        return { ...blob, source: "cache" };
-      } catch {
-        localStorage.removeItem(cacheKey(level, date));
-      }
+  const blobName = dailyBlobName(level, date);
+  if (shelbyMisses.has(blobName)) return null;
+
+  try {
+    // The dynamic import is inside the timeout too: a stalled chunk fetch
+    // would otherwise hang the cascade just as a stalled download did.
+    const bytes = await withTimeout(
+      (async () => {
+        const mod = await import("@shelby-protocol/sdk/browser");
+        const apiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
+        const client = new mod.ShelbyBlobClient({
+          apiKey: apiKey && apiKey !== "shelby_YOUR_KEY_HERE" ? apiKey : undefined,
+          network: "shelbynet",
+        });
+        const buf = await (client as unknown as {
+          download: (args: { account: string; blobName: string }) => Promise<Uint8Array | ArrayBuffer>;
+        }).download({ account, blobName });
+        return buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      })(),
+      SHELBY_TIMEOUT_MS,
+      `shelby download ${blobName}`,
+    );
+
+    const blob = decodePuzzleBlob(bytes);
+    writeCache(level, date, bytes);
+    return { ...blob, source: "shelby" };
+  } catch (err) {
+    shelbyMisses.add(blobName);
+    console.warn("[shelby:fallback]", err);
+    return null;
+  }
+}
+
+/** Tier 2. Runs regardless of wallet or curator configuration. */
+function tierCache(level: number, date: string): FetchedPuzzle | null {
+  if (typeof window === "undefined") return null;
+  let cached: string | null = null;
+  try {
+    cached = localStorage.getItem(cacheKey(level, date));
+  } catch {
+    return null;
+  }
+  if (!cached) return null;
+  try {
+    const buf = Uint8Array.from(atob(cached), (c) => c.charCodeAt(0));
+    return { ...decodePuzzleBlob(buf), source: "cache" };
+  } catch (err) {
+    console.warn("[shelby:fallback]", err);
+    try {
+      localStorage.removeItem(cacheKey(level, date));
+    } catch {
+      /* ignore */
     }
+    return null;
   }
+}
 
-  // 3) deterministic generator
-  const fb = fallback(level);
-  if (typeof window !== "undefined") {
-    const buf = encodePuzzleBlob(fb);
-    const b64 = btoa(String.fromCharCode(...buf));
-    localStorage.setItem(cacheKey(level, date), b64);
+/** Tier 3. Runs regardless of wallet state and cannot fail. */
+function tierGenerated(level: number, date: string): FetchedPuzzle {
+  const fb = generateFallbackPuzzle(level);
+  try {
+    writeCache(level, date, encodePuzzleBlob(fb));
+  } catch {
+    /* encoding the cache copy must never block rendering */
   }
   return fb;
+}
+
+export async function fetchPuzzle(level: number): Promise<FetchedPuzzle> {
+  const date = todayUTC();
+
+  // Shelby first so a locally generated puzzle can never permanently shadow a
+  // real blob published by the curator.
+  const fromShelby = await tierShelby(level, date);
+  if (fromShelby) return fromShelby;
+
+  const fromCache = tierCache(level, date);
+  if (fromCache) return fromCache;
+
+  return tierGenerated(level, date);
 }

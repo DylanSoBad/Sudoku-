@@ -41,6 +41,30 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Reject if `work` has not settled within `ms`, so a caller can cascade to a
+ * fallback instead of awaiting forever. The underlying operation cannot be
+ * cancelled; it is simply left to settle unobserved.
+ */
+export function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      },
+    );
+  });
+}
+
 export function randomId(): string {
   return Math.random().toString(36).slice(2, 10);
 }

@@ -8,14 +8,10 @@ import {
   HINT_COST_SUSD,
   REWARD_PER_LEVEL_SUSD,
 } from "@/lib/tokenomics";
-import {
-  fnv1a,
-  generateFullSolution,
-  type Board,
-  type Difficulty,
-} from "@/lib/sudoku";
+import { fnv1a, generatePuzzle, type Board, type Difficulty } from "@/lib/sudoku";
 import { fetchBlobBytes, recordRead } from "@/lib/shelby";
-import { dailyBlobName, todayKey } from "@/lib/utils";
+import { dailyBlobName, todayKey, withTimeout } from "@/lib/utils";
+import { SHELBY_TIMEOUT_MS } from "@/lib/fetcher";
 
 export type PuzzleSource = "shelby" | "cache" | "generated";
 
@@ -63,21 +59,8 @@ function cachePut(level: number, bytes: Uint8Array): void {
 }
 
 function generateBlob(level: number): PuzzleBlob {
-  const econ = economicsForLevel(level);
   const seed = fnv1a(`sudoku:level:${level}:${todayKey()}`);
-  const solution = generateFullSolution(seed);
-  const puzzle = solution.slice();
-  const empties = econ.empties;
-  let removed = 0;
-  let i = 0;
-  while (removed < empties && i < 81) {
-    const j = Math.floor(((seed + i) % 1000) / 1000 * 81);
-    if (puzzle[j] !== 0) {
-      puzzle[j] = 0;
-      removed++;
-    }
-    i++;
-  }
+  const { puzzle, solution } = generatePuzzle(level, seed);
   return {
     level,
     difficulty: difficultyForLevel(level),
@@ -89,12 +72,24 @@ function generateBlob(level: number): PuzzleBlob {
   };
 }
 
+/** Tier 1. The only tier that needs an account; resolves null on any failure. */
 async function tryShelby(level: number): Promise<Uint8Array | null> {
   if (typeof window === "undefined") return null;
+  const account =
+    process.env.NEXT_PUBLIC_CURATOR_ADDRESS?.trim() ||
+    process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim() ||
+    "";
+  if (!account) {
+    console.warn("[shelby:fallback]", "no curator account configured");
+    return null;
+  }
+  const blobName = dailyBlobName(level, todayKey());
   try {
-    const account = process.env.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS?.trim() || "sudoku-curator";
-    const blobName = dailyBlobName(level, todayKey());
-    return await fetchBlobBytes({ account, blobName });
+    return await withTimeout(
+      fetchBlobBytes({ account, blobName }),
+      SHELBY_TIMEOUT_MS,
+      `shelby download ${blobName}`,
+    );
   } catch (err) {
     console.warn("[shelby:fallback]", err);
     return null;
@@ -114,14 +109,8 @@ export function usePuzzle(level: number): UsePuzzleState {
     setState({ blob: null, source: null, error: null, loading: true });
 
     (async () => {
-      const cached = cacheGet(level);
-      if (cached) {
-        if (cancelled) return;
-        recordRead(level, "cache");
-        setState({ blob: cached, source: "cache", error: null, loading: false });
-        return;
-      }
-
+      // 1) Shelby, before the cache so a generated puzzle can never shadow a
+      //    real blob. Time-capped inside tryShelby.
       const shelbyBytes = await tryShelby(level);
       if (shelbyBytes) {
         try {
@@ -136,6 +125,16 @@ export function usePuzzle(level: number): UsePuzzleState {
         }
       }
 
+      // 2) localStorage cache — runs regardless of wallet state.
+      const cached = cacheGet(level);
+      if (cached) {
+        if (cancelled) return;
+        recordRead(level, "cache");
+        setState({ blob: cached, source: "cache", error: null, loading: false });
+        return;
+      }
+
+      // 3) Deterministic generator — cannot fail.
       const blob = generateBlob(level);
       if (cancelled) return;
       recordRead(level, "generated");

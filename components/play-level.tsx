@@ -8,7 +8,7 @@ import { Delete } from "lucide-react";
 import { SudokuBoard, type SudokuBoardHandle } from "./sudoku-board";
 import { Button } from "@/components/ui/button";
 import { RewardModal } from "./RewardModal";
-import { fetchPuzzle, type FetchedPuzzle } from "@/lib/fetcher";
+import { fetchPuzzle, generateFallbackPuzzle, type FetchedPuzzle } from "@/lib/fetcher";
 import { recordRead } from "./ReadLedger";
 import { findEmpty, isSolved as checkSolved } from "@/lib/sudoku";
 import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
@@ -41,6 +41,9 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+/** Longer than the 4s Shelby cap so the cascade always gets to finish first. */
+const WATCHDOG_MS = 6_000;
+
 export interface PlayLevelPageProps {
   level?: number;
 }
@@ -63,6 +66,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const startedAt = useRef<number>(Date.now());
   const boardRef = useRef<SudokuBoardHandle | null>(null);
   const rewardFired = useRef(false);
+  const puzzleRef = useRef<FetchedPuzzle | null>(null);
+  puzzleRef.current = puzzle;
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +86,23 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     return () => {
       cancelled = true;
     };
+  }, [level]);
+
+  // Last-resort watchdog. fetchPuzzle is written to always resolve, so this
+  // should never fire; if it does, something upstream is pending forever and a
+  // playable board still beats an indefinite "Loading puzzle".
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      if (puzzleRef.current) return;
+      console.warn(
+        `[puzzle:watchdog] level ${level} produced no puzzle within ${WATCHDOG_MS}ms, forcing generated output`,
+      );
+      const fb = generateFallbackPuzzle(level);
+      setPuzzle(fb);
+      startedAt.current = Date.now();
+      recordRead(level, fb.source);
+    }, WATCHDOG_MS);
+    return () => window.clearTimeout(id);
   }, [level]);
 
   useEffect(() => {
@@ -285,10 +307,12 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
                 ? "Confirming"
                 : atHintLimit
                   ? `Hint limit reached - ${MAX_HINTS_PER_LEVEL}/${MAX_HINTS_PER_LEVEL}`
-                  : `Buy hint - ${HINT_COST_LABEL}`}
+                  : registry
+                    ? `Buy hint - ${HINT_COST_LABEL}`
+                    : "Free hint - offline"}
             </Button>
             <span className="ml-auto font-mono text-[11px] text-content-subtle">
-              source: {puzzle.source}
+              source: {puzzle.source} | chain: {registry ? "on" : "off"}
             </span>
           </div>
 
