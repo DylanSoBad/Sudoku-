@@ -1,30 +1,24 @@
 {
   "name": "Sudoku on Shelby",
-  "short_name": "Sudoku Shelby",
+  "short_name": "Sudoku",
   "description": "Campaign Sudoku — puzzles as Shelby blobs, paid with shelbyUSD on Aptos testnet.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#07080d",
-  "theme_color": "#07080d",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
   "orientation": "any",
   "icons": [
     {
-      "src": "/icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icons/icon-192.png?v=2",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-512.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

@@ -25,6 +25,17 @@ export const metadata: Metadata = {
   title: "Sudoku on Shelby",
   description: "Campaign sudoku on Aptos and Shelby. Earn shelbyUSD, climb 20 levels.",
   metadataBase: new URL("https://sudoku-d.vercel.app"),
+  // Browsers cache favicons far longer than any other asset, so every URL
+  // carries a version query that must be bumped when the artwork changes.
+  icons: {
+    icon: [
+      { url: "/favicon.ico?v=2", sizes: "any" },
+      { url: "/favicon-32x32.png?v=2", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-16x16.png?v=2", type: "image/png", sizes: "16x16" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png?v=2", sizes: "180x180" }],
+  },
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
