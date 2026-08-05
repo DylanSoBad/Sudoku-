@@ -48,6 +48,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "ui-sans-serif", "sans-serif"],
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {
@@ -55,11 +56,12 @@ const config: Config = {
         sm: ["14px", "20px"],
         base: ["16px", "24px"],
         lg: ["20px", "28px"],
-        xl: ["20px", "28px"],
-        "2xl": ["24px", "32px"],
-        "3xl": ["32px", "40px"],
-        "4xl": ["32px", "40px"],
-        "5xl": ["32px", "40px"],
+        xl: ["24px", "32px"],
+        "2xl": ["28px", "36px"],
+        "3xl": ["36px", "44px"],
+        "4xl": ["44px", "52px"],
+        "5xl": ["56px", "64px"],
+        "6xl": ["72px", "80px"],
       },
       // Capped at 12px so no leftover `rounded-2xl` / `rounded-full` can exceed it.
       borderRadius: {
@@ -75,6 +77,15 @@ const config: Config = {
       },
       transitionDuration: {
         DEFAULT: "150ms",
+      },
+      keyframes: {
+        "fade-up": {
+          from: { opacity: "0", transform: "translateY(14px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "fade-up": "fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both",
       },
     },
   },

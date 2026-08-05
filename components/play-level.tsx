@@ -281,28 +281,34 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const canRedo = boardRef.current?.canRedo() ?? false;
 
   return (
-    <main className="mx-auto flex max-w-[720px] flex-col px-6 pb-16 pt-8">
+    <main className="relative mx-auto flex max-w-[720px] flex-col px-6 pb-20 pt-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-64 max-w-lg bg-accent/[0.07] blur-3xl"
+      />
+
       <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-content">
+        <div className="space-y-1.5">
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-content">
             {isDaily ? "Daily challenge" : `Level ${pad2(level)}`}
           </h1>
-          <p className="text-xs uppercase tracking-wide text-content-muted">
-            {econ.difficulty} - {econ.empties} empty
+          <p className="text-xs uppercase tracking-[0.14em] text-content-muted">
+            {econ.difficulty}
+            <span className="text-content-subtle"> · {econ.empties} empty</span>
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1 rounded-md border border-line bg-surface/70 px-3 py-2 backdrop-blur-sm">
           <span className="font-mono text-lg tabular-nums text-content">{fmt(elapsedMs)}</span>
-          <span className="font-mono text-sm text-content-muted">
-            {hintCount} / {MAX_HINTS_PER_LEVEL} hints
+          <span className="font-mono text-[11px] text-content-muted">
+            {hintCount}/{MAX_HINTS_PER_LEVEL} hints
           </span>
         </div>
       </header>
 
-      <div className="my-6 h-px bg-line" />
+      <div className="my-8 h-px bg-gradient-to-r from-transparent via-line to-transparent" />
 
       {error && (
-        <div className="mb-4 rounded-md border border-line bg-surface px-3 py-2 text-sm text-danger">
+        <div className="mb-4 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
           {error}
         </div>
       )}
@@ -310,7 +316,13 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       {puzzle ? (
         <>
           <div className="flex justify-center">
-            <div className="rounded-lg border border-line bg-surface-2 p-3">
+            <div
+              className="rounded-xl border border-line-strong/80 bg-surface p-3 sm:p-4"
+              style={{
+                boxShadow:
+                  "0 0 0 1px rgba(139,92,246,0.08), 0 24px 48px -24px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.03)",
+              }}
+            >
               <SudokuBoard
                 ref={boardRef}
                 puzzle={puzzle.puzzle}
@@ -321,83 +333,91 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap justify-center gap-1.5">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
+          <div className="mt-6 space-y-3">
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-label={notesMode ? `Toggle note ${d}` : `Enter ${d}`}
+                  onClick={() => handleDigit(d)}
+                  className={cn(
+                    "h-10 w-11 rounded-md border font-mono text-base transition-colors duration-150",
+                    notesMode
+                      ? "border-accent/40 bg-accent/10 text-accent-hover hover:border-accent"
+                      : "border-line bg-surface-2 text-content hover:border-line-strong",
+                  )}
+                >
+                  {d}
+                </button>
+              ))}
               <button
-                key={d}
                 type="button"
-                aria-label={notesMode ? `Toggle note ${d}` : `Enter ${d}`}
-                onClick={() => handleDigit(d)}
-                className="h-10 w-11 rounded-md border border-line bg-surface-2 font-mono text-base text-content transition-colors duration-100 hover:border-line-strong"
+                aria-label="Erase cell"
+                onClick={handleClear}
+                className="flex h-10 w-11 items-center justify-center rounded-md border border-line bg-surface-2 text-content-muted transition-colors duration-150 hover:border-line-strong hover:text-content"
               >
-                {d}
+                <Delete className="h-4 w-4" />
               </button>
-            ))}
-            <button
-              type="button"
-              aria-label="Erase cell"
-              onClick={handleClear}
-              className="flex h-10 w-11 items-center justify-center rounded-md border border-line bg-surface-2 text-content-muted transition-colors duration-100 hover:border-line-strong hover:text-content"
-            >
-              <Delete className="h-4 w-4" />
-            </button>
-          </div>
+            </div>
 
-          <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-            <button
-              type="button"
-              aria-label="Undo"
-              aria-keyshortcuts="Control+Z"
-              disabled={!canUndo}
-              onClick={handleUndo}
-              className="flex h-9 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-content-muted transition-colors duration-100 hover:border-line-strong hover:text-content disabled:opacity-40"
-            >
-              <Undo2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Redo"
-              aria-keyshortcuts="Control+Y"
-              disabled={!canRedo}
-              onClick={handleRedo}
-              className="flex h-9 w-10 items-center justify-center rounded-md border border-line bg-surface-2 text-content-muted transition-colors duration-100 hover:border-line-strong hover:text-content disabled:opacity-40"
-            >
-              <Redo2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Toggle notes"
-              aria-pressed={notesMode}
-              onClick={() => setNotesMode((v) => !v)}
-              className={cn(
-                "flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors duration-100",
-                notesMode
-                  ? "border-accent bg-accent/10 text-accent-hover"
-                  : "border-line bg-surface-2 text-content-muted hover:border-line-strong hover:text-content",
-              )}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              Notes
-            </button>
-          </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="flex gap-1.5 rounded-md border border-line bg-surface/80 p-1">
+                <button
+                  type="button"
+                  aria-label="Undo"
+                  aria-keyshortcuts="Control+Z"
+                  disabled={!canUndo}
+                  onClick={handleUndo}
+                  className="flex h-8 w-9 items-center justify-center rounded-sm text-content-muted transition-colors duration-150 hover:bg-surface-2 hover:text-content disabled:opacity-35"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Redo"
+                  aria-keyshortcuts="Control+Y"
+                  disabled={!canRedo}
+                  onClick={handleRedo}
+                  className="flex h-8 w-9 items-center justify-center rounded-sm text-content-muted transition-colors duration-150 hover:bg-surface-2 hover:text-content disabled:opacity-35"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Toggle notes"
+                  aria-pressed={notesMode}
+                  onClick={() => setNotesMode((v) => !v)}
+                  className={cn(
+                    "flex h-8 items-center gap-1.5 rounded-sm px-2.5 text-xs font-medium transition-colors duration-150",
+                    notesMode
+                      ? "bg-accent/15 text-accent-hover"
+                      : "text-content-muted hover:bg-surface-2 hover:text-content",
+                  )}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Notes
+                </button>
+              </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Button variant="primary" onClick={buyHint} disabled={buying || atHintLimit}>
-              {buying
-                ? "Confirming"
-                : atHintLimit
-                  ? `Hint limit reached - ${MAX_HINTS_PER_LEVEL}/${MAX_HINTS_PER_LEVEL}`
-                  : registry
-                    ? `Buy hint - ${HINT_COST_LABEL}`
-                    : "Free hint - offline"}
-            </Button>
-            <span className="ml-auto font-mono text-[11px] text-content-subtle">
-              source: {puzzle.source} | chain: {registry ? "on" : "off"}
-            </span>
+              <Button variant="primary" onClick={buyHint} disabled={buying || atHintLimit}>
+                {buying
+                  ? "Confirming"
+                  : atHintLimit
+                    ? `Hints ${MAX_HINTS_PER_LEVEL}/${MAX_HINTS_PER_LEVEL}`
+                    : registry
+                      ? `Hint · ${HINT_COST_LABEL}`
+                      : "Free hint"}
+              </Button>
+            </div>
+
+            <p className="text-center font-mono text-[11px] text-content-subtle">
+              source: {puzzle.source} · chain: {registry ? "on" : "off"}
+            </p>
           </div>
 
           {isSolved && (
-            <div className="mt-6 flex items-center gap-3 border-t border-line pt-6">
+            <div className="mt-8 flex items-center gap-3 border-t border-line pt-6">
               <Button variant="secondary" onClick={() => router.push("/")}>
                 Back to levels
               </Button>
@@ -410,7 +430,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
           )}
         </>
       ) : (
-        <p className="text-sm text-content-muted">Loading puzzle</p>
+        <p className="animate-pulse text-sm text-content-muted">Loading puzzle…</p>
       )}
       {puzzle && (
         <RewardModal

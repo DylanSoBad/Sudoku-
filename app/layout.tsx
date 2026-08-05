@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Syne, Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/components/wallet-provider";
 import { AppProviders } from "@/components/app-providers";
 import { Header } from "@/components/Header";
 import { ToastProvider } from "@/components/ui/toast";
 
-const inter = Inter({
+const display = Syne({
+  subsets: ["latin"],
+  variable: "--font-display",
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
+});
+
+const sans = Outfit({
   subsets: ["latin"],
   variable: "--font-sans",
-  weight: ["400", "500", "600"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -40,12 +47,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="font-sans antialiased">
         <div
           aria-hidden
-          className="pointer-events-none fixed inset-0 z-0 opacity-[0.025]"
-          style={{ backgroundImage: "url('/grain.svg')", backgroundSize: "220px" }}
+          className="pointer-events-none fixed inset-0 z-0 opacity-[0.045]"
+          style={{ backgroundImage: "url('/grain.svg')", backgroundSize: "180px" }}
         />
         <WalletProvider>
           <AppProviders>

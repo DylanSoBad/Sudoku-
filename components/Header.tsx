@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { WalletBadge } from "./WalletBadge";
@@ -16,13 +17,23 @@ export function Header() {
   const pathname = usePathname() ?? "/";
 
   return (
-    <header className="sticky top-0 z-40 h-14 border-b border-line bg-bg/80 backdrop-blur-md">
+    <header className="sticky top-0 z-40 h-14 border-b border-line/80 bg-bg/70 backdrop-blur-md">
       <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-6 px-6">
-        <div className="flex items-center gap-2">
-          <Link href="/" className="text-sm font-semibold tracking-tight text-content">
-            Sudoku on Shelby
+        <div className="flex items-center gap-2.5">
+          <Link href="/" className="group flex items-center gap-2.5">
+            <Image
+              src="/icons/icon.svg"
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-md ring-1 ring-line transition-transform duration-200 group-hover:scale-[1.04]"
+              priority
+            />
+            <span className="font-display text-sm font-semibold tracking-tight text-content">
+              Sudoku on Shelby
+            </span>
           </Link>
-          <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 text-[11px] leading-none text-content-muted">
+          <span className="hidden rounded-sm bg-surface-2 px-1.5 py-0.5 text-[11px] leading-none text-content-muted sm:inline">
             testnet
           </span>
         </div>
@@ -36,7 +47,7 @@ export function Header() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center transition-colors duration-100",
+                  "relative flex items-center transition-colors duration-150",
                   active ? "text-content" : "text-content-muted hover:text-content",
                 )}
               >

@@ -282,7 +282,7 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
     <div
       role="grid"
       aria-label="Sudoku board"
-      className="inline-grid select-none grid-cols-9 border-2 border-zinc-700"
+      className="inline-grid select-none grid-cols-9 overflow-hidden rounded-md border-2 border-line-strong bg-bg/40"
     >
       {board.map((v, i) => {
         const r = rowOf(i);
@@ -305,24 +305,26 @@ export const SudokuBoard = forwardRef<SudokuBoardHandle, SudokuBoardProps>(funct
             onClick={() => setCursor(i)}
             aria-label={`row ${r + 1} column ${c + 1} value ${v || "empty"}`}
             className={cn(
-              "relative flex h-9 w-9 items-center justify-center border-b border-r border-zinc-800",
-              "bg-transparent font-mono outline-none transition-colors duration-100 sm:h-11 sm:w-11",
-              (c === 2 || c === 5) && "border-r-2 border-r-zinc-600",
-              (r === 2 || r === 5) && "border-b-2 border-b-zinc-600",
+              "relative flex h-9 w-9 items-center justify-center border-b border-r border-line/80",
+              "font-mono outline-none transition-colors duration-150 sm:h-11 sm:w-11",
+              (c === 2 || c === 5) && "border-r-2 border-r-line-strong",
+              (r === 2 || r === 5) && "border-b-2 border-b-line-strong",
               c === 8 && "border-r-0",
               r === 8 && "border-b-0",
-              isPeer && "bg-zinc-800/40",
-              isSameDigit && "bg-zinc-800/70",
-              isGiven[i] ? "text-lg font-medium text-zinc-100" : "text-lg font-normal text-zinc-300",
+              isPeer && "bg-surface-2/80",
+              isSameDigit && "bg-accent/10 text-accent-hover",
+              isGiven[i]
+                ? "text-lg font-medium text-content"
+                : "text-lg font-normal text-content-muted",
               conflictMask[i] && !isGiven[i] && "bg-danger/10 text-danger",
               conflictMask[i] && isGiven[i] && "text-danger",
-              isCursor && "relative z-10 ring-2 ring-inset ring-accent",
+              isCursor && "z-10 bg-accent/15 ring-2 ring-inset ring-accent",
             )}
           >
             {v !== 0 ? (
               v
             ) : cellNotes.length > 0 ? (
-              <span className="grid h-full w-full grid-cols-3 grid-rows-3 p-0.5 text-[9px] leading-none text-content-muted sm:text-[10px]">
+              <span className="grid h-full w-full grid-cols-3 grid-rows-3 p-0.5 text-[9px] leading-none text-content-subtle sm:text-[10px]">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => (
                   <span key={d} className="flex items-center justify-center">
                     {cellNotes.includes(d) ? d : ""}
