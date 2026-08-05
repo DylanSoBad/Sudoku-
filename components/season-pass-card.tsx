@@ -86,7 +86,6 @@ export function SeasonPassCard() {
         <CardDescription>{t.seasonPass.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-xs text-shelby-muted">{t.seasonPass.benefits}</p>
         {active && pass ? (
           <p className="text-sm text-shelby-gold">
             {t.seasonPass.activeUntil}{" "}
