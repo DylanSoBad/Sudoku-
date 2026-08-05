@@ -3,6 +3,8 @@
   "short_name": "Sudoku",
   "description": "Campaign Sudoku — puzzles as Shelby blobs, paid with shelbyUSD on Aptos testnet.",
   "start_url": "/",
+  "scope": "/",
+  "id": "/",
   "display": "standalone",
   "background_color": "#0a0a0b",
   "theme_color": "#0a0a0b",
@@ -19,6 +21,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png?v=3",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

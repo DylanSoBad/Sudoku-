@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Syne, Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
@@ -6,6 +6,8 @@ import { WalletProvider } from "@/components/wallet-provider";
 import { AppProviders } from "@/components/app-providers";
 import { Header } from "@/components/Header";
 import { ToastProvider } from "@/components/ui/toast";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { homeShareMetadata } from "@/lib/og";
 
 const display = Syne({
   subsets: ["latin"],
@@ -29,8 +31,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sudoku on Shelby",
-  description: "Campaign sudoku on Aptos and Shelby. Earn shelbyUSD, climb 20 levels.",
+  ...homeShareMetadata(),
   metadataBase: new URL("https://sudoku-d.vercel.app"),
   // Browsers cache favicons far longer than any other asset, so every URL
   // carries a version query that must be bumped when the artwork changes.
@@ -44,6 +45,17 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png?v=3", sizes: "180x180" }],
   },
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Sudoku",
+  },
+  applicationName: "Sudoku on Shelby",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0b",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -60,6 +72,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Header />
             <div className="relative z-10">{children}</div>
             <ToastProvider />
+            <ServiceWorkerRegister />
           </AppProviders>
         </WalletProvider>
       </body>

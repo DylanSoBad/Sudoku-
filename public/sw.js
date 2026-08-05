@@ -1,6 +1,6 @@
 /* Conservative SW: static assets + same-origin GETs for puzzle-ish paths. */
-const CACHE = "sudoku-shelby-v1";
-const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon.svg"];
+const CACHE = "sudoku-shelby-v2";
+const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon.svg?v=3"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
