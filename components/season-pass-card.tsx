@@ -43,7 +43,11 @@ export function SeasonPassCard() {
     setLoading(true);
     try {
       if (!registry) {
-        // Offline only when registry is unset.
+        if (process.env.NODE_ENV === "production") {
+          toast.error("On-chain registry required to purchase Season Pass");
+          return;
+        }
+        // Offline only when registry is unset (dev).
         const next = purchaseSeasonPassLocal(undefined, "local");
         setPass(next);
         toast.message(t.seasonPass.localPurchase);

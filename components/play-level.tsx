@@ -71,6 +71,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const [puzzle, setPuzzle] = useState<FetchedPuzzle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hintCount, setHintCount] = useState(0);
+  /** When registry is set, paid hints require a successful on-chain counter read. */
+  const [hintChainOk, setHintChainOk] = useState(false);
   const [buying, setBuying] = useState(false);
   const [rewardOpen, setRewardOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -185,16 +187,22 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     const addr = account?.address;
     if (!addr) {
       setHintCount(0);
+      setHintChainOk(false);
       return;
     }
     if (registry) {
       const onChain = await fetchOnChainHintsUsed(registry, addr, level);
       if (onChain !== null) {
         setHintCount(onChain);
+        setHintChainOk(true);
         return;
       }
+      // Fail closed: do not trust forgeable localStorage for paid hints.
+      setHintChainOk(false);
+      return;
     }
     setHintCount(getLocalHintsUsed(addr, level));
+    setHintChainOk(false);
   }, [account?.address, registry, level]);
 
   useEffect(() => {
@@ -225,6 +233,14 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);
       setHintCount(bumpLocalHintsUsed(addr, level));
       bumpHistory();
+      return;
+    }
+
+    if (!hintChainOk) {
+      toast.error("Cannot verify hint balance on-chain", {
+        description: "Retry when the Aptos RPC is reachable.",
+      });
+      await refreshHints();
       return;
     }
 
@@ -272,6 +288,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     refreshHints,
     signAndSubmitTransaction,
     bumpHistory,
+    hintChainOk,
   ]);
 
   const handleDigit = (d: number) => {
@@ -455,14 +472,20 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
                 </button>
               </div>
 
-              <Button variant="primary" onClick={buyHint} disabled={buying || atHintLimit}>
+              <Button
+                variant="primary"
+                onClick={buyHint}
+                disabled={buying || atHintLimit || (Boolean(registry) && !hintChainOk)}
+              >
                 {buying
                   ? "Confirming"
                   : atHintLimit
                     ? `Hints ${MAX_HINTS_PER_LEVEL}/${MAX_HINTS_PER_LEVEL}`
-                    : registry
-                      ? `Hint · ${hintLabel}${seasonDiscount ? " · pass" : ""}`
-                      : "Free hint"}
+                    : registry && !hintChainOk
+                      ? "Hint unavailable"
+                      : registry
+                        ? `Hint · ${hintLabel}${seasonDiscount ? " · pass" : ""}`
+                        : "Free hint"}
               </Button>
             </div>
 

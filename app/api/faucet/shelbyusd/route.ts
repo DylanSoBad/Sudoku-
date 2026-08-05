@@ -1,26 +1,49 @@
 import { NextResponse } from "next/server";
+import { extractAddressFromBody } from "@/lib/server/aptos-address";
+import { clientKey, rateLimit } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 
-function readBase(): string {
-  const raw = process.env.NEXT_PUBLIC_SHELBYUSD_FAUCET_URL?.trim();
-  return raw && raw.length > 0 ? raw.replace(/\/+$/, "") : "https://faucet.shelby.xyz/shelbyusd";
+const ALLOWED_HOSTS = new Set(["faucet.shelby.xyz"]);
+
+function readBase(): string | null {
+  const raw = (
+    process.env.SHELBYUSD_FAUCET_URL ||
+    process.env.NEXT_PUBLIC_SHELBYUSD_FAUCET_URL ||
+    "https://faucet.shelby.xyz/shelbyusd"
+  ).trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw.replace(/\/+$/, ""));
+    if (u.protocol !== "https:") return null;
+    if (!ALLOWED_HOSTS.has(u.host)) return null;
+    return `${u.origin}${u.pathname}`.replace(/\/+$/, "") || u.origin;
+  } catch {
+    return null;
+  }
 }
 
-interface Body {
-  address?: unknown;
-}
-
-function extractAddress(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) return null;
-  const v = (body as Record<string, unknown>)["address"];
-  if (typeof v !== "string") return null;
-  const trimmed = v.trim();
-  if (!trimmed.startsWith("0x") || trimmed.length < 10) return null;
-  return trimmed;
+function faucetEnabled(): boolean {
+  const v = (process.env.FAUCET_ENABLED ?? "true").trim().toLowerCase();
+  return v !== "0" && v !== "false" && v !== "off";
 }
 
 export async function POST(req: Request): Promise<Response> {
+  if (!faucetEnabled()) {
+    return NextResponse.json({ ok: false, error: "faucet disabled" }, { status: 403 });
+  }
+
+  const limited = rateLimit(clientKey(req, "susd-faucet"), 3, 60 * 60 * 1000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, error: "rate limited — try again later" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
+    );
+  }
+
   let payload: unknown = null;
   try {
     payload = await req.json();
@@ -28,12 +51,16 @@ export async function POST(req: Request): Promise<Response> {
     payload = null;
   }
 
-  const address = extractAddress(payload);
+  const address = extractAddressFromBody(payload);
   if (!address) {
     return NextResponse.json({ ok: false, error: "missing or invalid `address`" }, { status: 400 });
   }
 
   const url = readBase();
+  if (!url) {
+    return NextResponse.json({ ok: false, error: "faucet URL not allowed" }, { status: 500 });
+  }
+
   try {
     const upstream = await fetch(url, {
       method: "POST",
