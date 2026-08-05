@@ -1,4 +1,6 @@
-export function recordRead(level: number, source: "shelby" | "cache" | "generated"): void {
+import type { PuzzleSourceName } from "@/lib/shelby";
+
+export function recordRead(level: number, source: PuzzleSourceName): void {
   // Re-export shim for the lowercase tree.
   // The real implementation lives in `lib/shelby.ts` and is invoked by the
   // hooks; this placeholder keeps the legacy import surface stable.

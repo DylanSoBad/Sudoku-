@@ -30,7 +30,8 @@ Open <http://localhost:3000>.
 | --------------------------------------- | --------------------------------------------------- |
 | NEXT_PUBLIC_APTOS_NETWORK               | testnet                                             |
 | NEXT_PUBLIC_APTOS_API_KEY               | Aptos / Geomi API key                               |
-| NEXT_PUBLIC_SHELBY_API_KEY              | Shelby SDK API key (often same Aptos key)           |
+| NEXT_PUBLIC_SHELBY_API_KEY              | Shelby SDK API key for the browser (optional)       |
+| SHELBY_API_KEY                          | Server-only Shelby key for /api/blob (optional)     |
 | NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS     | Published Move package address (empty until deploy) |
 | NEXT_PUBLIC_APTOS_FAUCET_URL            | Default https://faucet.testnet.aptoslabs.com        |
 | NEXT_PUBLIC_SHELBYUSD_FAUCET_URL        | Default https://faucet.shelby.xyz/shelbyusd         |
@@ -84,6 +85,15 @@ shelbyUSD reports **8 decimals** on testnet, so the on-chain raw amounts are
 ## Architecture notes
 
 - **SSR-safe Shelby**: `@shelby-protocol/sdk/browser` is dynamic-imported only in the browser; failures log `[shelby:fallback]` and use the deterministic generator.
+- **Blob read order**: browser SDK → `/api/blob/<name>` (server-side Shelby, no
+  public key needed) → `public/puzzles` mirror → deterministic generator. The
+  read ledger labels the mirror as `mirror`, never `shelby`, so the Shelby count
+  reflects real Shelby reads.
+- **shelbynet is ephemeral**: the network is wiped roughly weekly, taking blobs
+  and the account's storage-location preference with it. The
+  `reseed-shelby` workflow re-uploads every blob daily and re-asserts the
+  location; it replays the committed mirror bytes so on-chain commitments stay
+  valid. Verify by hand with `npm run shelby:check` and `npm run shelby:funds`.
 - **Blob layout**: `<JSON header>\n` + 81 puzzle bytes + 81 solution bytes.
 - **Progress**: `localStorage` key `shelby-sudoku-progress`, HMAC-SHA-256 over `address:level` with `NEXT_PUBLIC_PROGRESS_SALT` (public salt — casual anti-tamper only).
 

@@ -12,6 +12,7 @@
  * page on "Loading puzzle" indefinitely.
  */
 import { decodePuzzleBlob, encodePuzzleBlob, type PuzzleBlob } from "./blob-layout";
+import type { PuzzleSourceName } from "./shelby";
 import {
   difficultyForLevel,
   HINT_COST_SUSD,
@@ -34,7 +35,7 @@ export const SHELBY_TIMEOUT_MS = 4_000;
 const shelbyMisses = new Set<string>();
 
 export interface FetchedPuzzle extends PuzzleBlob {
-  source: "shelby" | "cache" | "generated";
+  source: PuzzleSourceName;
   empties?: number;
 }
 
@@ -120,6 +121,26 @@ async function tryPublicMirror(blobName: string): Promise<Uint8Array | null> {
   }
 }
 
+/**
+ * Shelby download performed by the server with the private `SHELBY_API_KEY`.
+ * Lets production read real Shelby blobs without shipping the key to the
+ * browser; 404 means Shelby is unconfigured or unreachable.
+ */
+async function tryServerShelby(blobName: string): Promise<Uint8Array | null> {
+  try {
+    const res = await withTimeout(
+      fetch(`/api/blob/${encodeURIComponent(blobName)}`),
+      SHELBY_TIMEOUT_MS,
+      `shelby proxy ${blobName}`,
+    );
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch (err) {
+    console.warn("[shelby:fallback] proxy", err);
+    return null;
+  }
+}
+
 /** Tier 1. Curated blob via Shelby SDK, then public/puzzles mirror. */
 async function tierShelby(level: number, date: string): Promise<FetchedPuzzle | null> {
   if (typeof window === "undefined") return null;
@@ -176,12 +197,24 @@ async function tierShelby(level: number, date: string): Promise<FetchedPuzzle | 
     );
   }
 
+  // Server-side Shelby read: no public API key needed, still real Shelby bytes.
+  const viaServer = await tryServerShelby(blobName);
+  if (viaServer) {
+    try {
+      const blob = decodePuzzleBlob(viaServer);
+      writeCache(level, date, viaServer);
+      return { ...blob, source: "shelby" };
+    } catch (err) {
+      console.warn("[shelby:fallback] proxy decode failed", err);
+    }
+  }
+
   const mirrored = await tryPublicMirror(blobName);
   if (mirrored) {
     try {
       const blob = decodePuzzleBlob(mirrored);
       writeCache(level, date, mirrored);
-      return { ...blob, source: "shelby" };
+      return { ...blob, source: "mirror" };
     } catch (err) {
       console.warn("[shelby:fallback] public mirror decode failed", err);
     }

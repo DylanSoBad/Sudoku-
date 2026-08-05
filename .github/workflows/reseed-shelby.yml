@@ -1,0 +1,60 @@
+name: Re-upload Shelby blobs
+
+# shelbynet is a prototype network that gets wiped roughly once a week, taking
+# every blob (and the account's storage-location preference) with it. Without
+# this job the app quietly degrades to the public mirror until someone notices.
+# Registry entries live on Aptos testnet and survive, so skip re-registering.
+
+on:
+  schedule:
+    # 00:20 UTC daily — after the daily-puzzle job, cheap enough to just re-run.
+    - cron: "20 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  reseed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Write Aptos profile
+        env:
+          APTOS_PRIVATE_KEY: ${{ secrets.APTOS_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APTOS_PRIVATE_KEY" ]; then
+            echo "APTOS_PRIVATE_KEY secret is required" >&2
+            exit 1
+          fi
+          mkdir -p move/.aptos
+          KEY="$APTOS_PRIVATE_KEY"
+          case "$KEY" in
+            ed25519-priv-*) ;;
+            0x*) KEY="ed25519-priv-$KEY" ;;
+            *) KEY="ed25519-priv-0x$KEY" ;;
+          esac
+          cat > move/.aptos/config.yaml <<EOF
+          profiles:
+            sudoku:
+              private_key: "$KEY"
+              network: testnet
+          EOF
+
+      - name: Re-upload every blob to Shelby
+        env:
+          SHELBY_API_KEY: ${{ secrets.SHELBY_API_KEY }}
+        run: node scripts/seed-puzzles.mjs --no-register
+
+      - name: Verify a blob reads back from Shelby
+        env:
+          SHELBY_API_KEY: ${{ secrets.SHELBY_API_KEY }}
+          NEXT_PUBLIC_CURATOR_ADDRESS: ${{ vars.NEXT_PUBLIC_CURATOR_ADDRESS }}
+          NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS: ${{ vars.NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS }}
+        run: node scripts/check-shelby-blob.mjs shelby-sudoku-level-1

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { levelsForUI } from "@/lib/levels";
 import { loadProgress } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -14,15 +14,30 @@ function pad(n: number): string {
 
 export function LevelMap() {
   const { account } = useWallet();
-  const cleared = useMemo(
-    () => (account?.address ? loadProgress(account.address) : []),
-    [account?.address],
-  );
+  const address = account?.address;
+  const [cleared, setCleared] = useState<number[]>([]);
+
+  const refresh = useCallback(() => {
+    setCleared(address ? loadProgress(address) : []);
+  }, [address]);
+
+  // Progress is written on another route (the play page), so re-read it on
+  // mount, on the progress event, and whenever the tab regains focus.
+  useEffect(() => {
+    refresh();
+    const onFocus = () => refresh();
+    window.addEventListener("shelby:progress", refresh);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("shelby:progress", refresh);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [refresh]);
+
   const clearedSet = useMemo(() => new Set(cleared), [cleared]);
-  const levels = useMemo(
-    () => levelsForUI(account?.address, cleared),
-    [account?.address, cleared],
-  );
+  const levels = useMemo(() => levelsForUI(address, cleared), [address, cleared]);
 
   return (
     <section aria-labelledby="level-map-title" className="scroll-mt-20" data-tour="levels">

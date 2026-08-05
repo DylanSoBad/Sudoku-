@@ -33,6 +33,7 @@ import { recordRun } from "@/lib/leaderboard";
 import { bumpStreak } from "@/lib/streak";
 import { isSeasonPassActive, seasonBoardClass, fetchOnChainSeasonPassActive, clearSeasonPassLocal } from "@/lib/season-pass";
 import { buildBuyHintPayload } from "@/lib/contracts";
+import { explainTxError } from "@/lib/tx-errors";
 
 function fmt(ms: number): string {
   const total = Math.round(ms / 1000);
@@ -279,9 +280,10 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
         },
       });
     } catch (e) {
-      const msg = (e as Error).message ?? "Hint purchase failed";
-      setError(msg);
-      toast.error("Hint purchase failed", { description: msg });
+      const friendly = explainTxError(e, "hint");
+      setError(`${friendly.title} — ${friendly.detail}`);
+      toast.error(friendly.title, { description: friendly.detail });
+      console.warn("[hint]", friendly.raw);
     } finally {
       setBuying(false);
     }

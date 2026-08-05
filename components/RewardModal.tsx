@@ -16,6 +16,9 @@ import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
 import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
 import { awardMilestonesForLevel } from "@/lib/award-badges";
 import { buildClaimWithProofPayload, type ClaimTicket } from "@/lib/contracts";
+import { getAptBalance } from "@/lib/aptos";
+import { findClaimBlocker } from "@/lib/rewards-status";
+import { explainTxError } from "@/lib/tx-errors";
 import { toast } from "sonner";
 
 export interface RewardModalProps {
@@ -125,6 +128,15 @@ export function RewardModal({
     setClaiming(true);
     setClaimError(undefined);
     try {
+      // Check gas and the treasury before the wallet prompt, so a doomed claim
+      // fails with an explanation instead of a raw VM abort.
+      const apt = await getAptBalance(account.address).catch(() => 1);
+      const blocker = await findClaimBlocker(rewardSusd, apt);
+      if (blocker) {
+        setClaimError(`${blocker.title} — ${blocker.detail}`);
+        return;
+      }
+
       const ticket =
         board && board.length === 81
           ? await requestTicket(account.address, level, board, ms)
@@ -161,14 +173,9 @@ export function RewardModal({
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       goNext();
     } catch (e) {
-      const raw = (e as Error).message ?? "Transaction failed";
-      // rewards.move: E_PROOF_REQUIRED — the verifier is not reachable, so the
-      // chain refuses the legacy path rather than paying an unverified solve.
-      setClaimError(
-        raw.includes("1004")
-          ? "Claim verification is unavailable right now — try again shortly."
-          : raw,
-      );
+      const friendly = explainTxError(e, "claim");
+      setClaimError(`${friendly.title} — ${friendly.detail}`);
+      console.warn("[claim]", friendly.raw);
     } finally {
       setClaiming(false);
     }

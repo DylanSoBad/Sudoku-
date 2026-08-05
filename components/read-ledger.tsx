@@ -51,7 +51,7 @@ export function ReadLedger() {
                     variant={
                       e.source === "shelby"
                         ? "accent"
-                        : e.source === "cache"
+                        : e.source === "cache" || e.source === "mirror"
                           ? "muted"
                           : "gold"
                     }

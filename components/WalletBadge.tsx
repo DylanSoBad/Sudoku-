@@ -6,6 +6,7 @@ import { HINT_COST_SUSD } from "@/lib/tokenomics";
 import { toast } from "sonner";
 import { loadBalances, type Balances } from "@/lib/balances";
 import { Button } from "@/components/ui/button";
+import { WalletPicker } from "@/components/WalletPicker";
 
 function short(addr?: string): string {
   if (!addr) return "";
@@ -23,8 +24,9 @@ const SUSD_DECIMALS = (() => {
 })();
 
 export function WalletBadge() {
-  const { account, connect, disconnect } = useWallet();
+  const { account, disconnect } = useWallet();
   const [balances, setBalances] = useState<Balances>({ apt: 0, shelbyUSD: 0 });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const address = account?.address;
 
@@ -58,14 +60,17 @@ export function WalletBadge() {
 
   if (!account) {
     return (
-      <Button
-        data-tour="wallet"
-        size="sm"
-        variant="primary"
-        onClick={() => connect("Petra" as unknown as Parameters<typeof connect>[0])}
-      >
-        Connect wallet
-      </Button>
+      <>
+        <Button
+          data-tour="wallet"
+          size="sm"
+          variant="primary"
+          onClick={() => setPickerOpen(true)}
+        >
+          Connect wallet
+        </Button>
+        <WalletPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+      </>
     );
   }
 

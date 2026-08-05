@@ -72,6 +72,9 @@ function saveProgress(address: string, cleared: number[]): void {
   }
   parsed[address.toLowerCase()] = { v: 1, cleared: [...cleared].sort((a, b) => a - b), ts: Date.now() };
   window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(parsed));
+  // The level map reads this synchronously on render, so without a nudge it
+  // keeps showing the next level as locked until a reload.
+  window.dispatchEvent(new CustomEvent("shelby:progress"));
 }
 
 export async function markCleared(address: string, level: number): Promise<void> {

@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import {
   Account,
+  AccountAddress,
   Aptos,
   AptosConfig,
   Ed25519PrivateKey,
@@ -39,6 +40,11 @@ const HINT = 0.0005;
 const SHELBY_RPC = "https://api.shelbynet.shelby.xyz/shelby";
 const SHELBY_INDEXER =
   "https://api.shelbynet.aptoslabs.com/nocode/v1/public/cmforrguw0042s601fn71f9l2/v1/graphql";
+const SHELBY_FULLNODE = "https://api.shelbynet.shelby.xyz/v1";
+// Keep in sync with lib/shelby-blob.ts (scripts cannot import the TS module).
+const SHELBY_DEPLOYER =
+  "0x85fdb9a176ab8ef1d9d9c1b60d60b3924f0800ac1de1cc2085fb0b8bb4988e6a";
+const SHELBY_LOCATION = "shelbynet-1";
 
 function loadEnvFiles() {
   for (const name of [".env.local", ".env"]) {
@@ -255,6 +261,54 @@ async function registerPuzzle(aptos, account, level, name, bytes) {
   return pending.hash;
 }
 
+/**
+ * Shelby refuses writes until the account has picked a storage location, and
+ * shelbynet is wiped roughly weekly — which drops the preference along with
+ * everything else. Re-assert it on every run so a wipe does not silently turn
+ * every upload into a mirror-only seed.
+ */
+async function ensureShelbyLocation(account) {
+  const address = account.accountAddress.toString();
+  const aptos = new Aptos(
+    new AptosConfig({
+      network: Network.SHELBYNET ?? "shelbynet",
+      fullnode: SHELBY_FULLNODE,
+    }),
+  );
+  try {
+    const out = await aptos.view({
+      payload: {
+        function: `${SHELBY_DEPLOYER}::location_preference::get_location_preference`,
+        functionArguments: [address],
+      },
+    });
+    const vec = out?.[0]?.vec;
+    if (Array.isArray(vec) && vec.length > 0) return true;
+  } catch {
+    // Fall through and try to set it; a failed read is not proof of absence.
+  }
+
+  try {
+    const tx = await aptos.transaction.build.simple({
+      sender: account.accountAddress,
+      data: {
+        function: `${SHELBY_DEPLOYER}::location_preference::set_default_location_preference`,
+        functionArguments: [SHELBY_LOCATION],
+      },
+    });
+    const pending = await aptos.signAndSubmitTransaction({ signer: account, transaction: tx });
+    const res = await aptos.waitForTransaction({ transactionHash: pending.hash });
+    console.log(`shelby location=${SHELBY_LOCATION} ${res.success ? "set" : res.vm_status}`);
+    return res.success;
+  } catch (err) {
+    console.warn(
+      "  shelby location setup failed:",
+      err instanceof Error ? err.message : err,
+    );
+    return false;
+  }
+}
+
 function shelbyApiKey() {
   const raw = (
     process.env.SHELBY_API_KEY ||
@@ -266,10 +320,12 @@ function shelbyApiKey() {
 }
 
 async function tryShelbyUpload(account, name, bytes) {
-  const apiKey = shelbyApiKey();
+  // Shelbynet accepts anonymous requests (lower rate limits), so a missing key
+  // is not a reason to skip the upload — seeding 21 blobs stays well inside
+  // the anonymous budget. A key only raises the ceiling.
+  const apiKey = shelbyApiKey() ?? undefined;
   if (!apiKey) {
-    console.warn("  shelby upload skipped: SHELBY_API_KEY / NEXT_PUBLIC_SHELBY_API_KEY missing");
-    return false;
+    console.log("  shelby: no API key, uploading anonymously");
   }
   try {
     const mod = await import("@shelby-protocol/sdk/node");
@@ -287,6 +343,9 @@ async function tryShelbyUpload(account, name, bytes) {
     const client = new Client({
       network,
       apiKey,
+      // The SDK's default deployer trails shelbynet redeployments, which shows
+      // up as "Module not found … blob_metadata".
+      deployer: AccountAddress.from(SHELBY_DEPLOYER),
       rpc: { baseUrl: SHELBY_RPC, apiKey },
       indexer: { baseUrl: SHELBY_INDEXER, apiKey },
     });
@@ -299,24 +358,7 @@ async function tryShelbyUpload(account, name, bytes) {
       return false;
     }
 
-    // Node SDK: { blobData, signer, blobName, expirationMicros }
-    // Some older wrappers accepted { account, data/bytes }.
-    try {
-      await client.upload({
-        blobData,
-        signer: account,
-        blobName: name,
-        expirationMicros,
-      });
-    } catch (firstErr) {
-      await client.upload({
-        account,
-        blobData,
-        blobName: name,
-        expirationMicros,
-      });
-      void firstErr;
-    }
+    await client.upload({ blobData, signer: account, blobName: name, expirationMicros });
     console.log("  shelby upload ok");
     return true;
   } catch (err) {
@@ -338,24 +380,42 @@ async function main() {
 
   const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
 
+  await ensureShelbyLocation(account);
+  // Re-uploading after a shelbynet wipe does not need new registry entries,
+  // and re-registering an existing level just aborts.
+  const skipRegister = process.argv.includes("--no-register");
+
   for (const level of levels) {
-    const { bytes, name } = buildLevel(level, date);
+    const built = buildLevel(level, date);
+    const name = built.name;
     const path = join(OUT, name);
-    writeFileSync(path, bytes);
+
+    // `buildLevel` stamps the current time into the blob, so rebuilding yields
+    // different bytes every run. On a re-upload that would invalidate the
+    // commitment already registered on-chain, so replay the mirror instead.
+    let bytes = built.bytes;
+    let reused = false;
+    if (skipRegister && existsSync(path)) {
+      bytes = new Uint8Array(readFileSync(path));
+      reused = true;
+    } else {
+      writeFileSync(path, bytes);
+    }
+
     const sha = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
     console.log(`\nlevel ${level}: ${name} (${bytes.length} bytes, sha256=${sha}…)`);
-    console.log(`  wrote ${path}`);
+    console.log(reused ? `  reusing ${path}` : `  wrote ${path}`);
 
     await tryShelbyUpload(account, name, bytes);
 
-    if (level >= 1) {
+    if (level >= 1 && !skipRegister) {
       try {
         const hash = await registerPuzzle(aptos, account, level, name, bytes);
         console.log(`  registered tx=${hash}`);
       } catch (err) {
         console.error(`  register failed:`, err instanceof Error ? err.message : err);
       }
-    } else {
+    } else if (level === 0) {
       console.log("  daily: shelby/public only (no registry entry)");
     }
   }

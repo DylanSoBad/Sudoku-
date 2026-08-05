@@ -35,16 +35,26 @@ export interface PuzzleSource {
 }
 export type { PuzzleSource as PuzzleSourceTag };
 
+/**
+ * Where a puzzle actually came from. `shelby` means the bytes were served by
+ * Shelby; `mirror` is the same curated blob replayed from `public/puzzles`,
+ * kept distinct so the read ledger cannot overstate Shelby usage.
+ */
+export type PuzzleSourceName = "shelby" | "mirror" | "cache" | "generated";
+
 export interface FetchedPuzzle {
   puzzle: number[];
   solution: number[];
   empties: number;
-  source: "shelby" | "cache" | "generated";
+  source: PuzzleSourceName;
 }
 
-const SHELBY_RPC = "https://api.shelbynet.shelby.xyz/shelby";
-const SHELBY_INDEXER =
-  "https://api.shelbynet.aptoslabs.com/nocode/v1/public/cmforrguw0042s601fn71f9l2/v1/graphql";
+import {
+  SHELBY_DEPLOYER,
+  SHELBY_INDEXER_URL as SHELBY_INDEXER,
+  SHELBY_RPC_URL as SHELBY_RPC,
+  readShelbyBlob,
+} from "./shelby-blob";
 
 let cachedClient: ShelbyUploadClient | null = null;
 let cachedPut: ShelbyPutClient | null = null;
@@ -78,13 +88,13 @@ async function createRawShelbyClient(): Promise<{
     const raw = new Client({
       network: shelbyNetwork(),
       apiKey,
+      // The SDK's built-in deployer default has lagged behind shelbynet
+      // redeployments, which surfaces as "Module not found … blob_metadata".
+      deployer: SHELBY_DEPLOYER,
       rpc: { baseUrl: SHELBY_RPC, apiKey },
       indexer: { baseUrl: SHELBY_INDEXER, apiKey },
     }) as {
-      download?: (args: { account: string; blobName: string }) => Promise<{
-        data?: Uint8Array | ArrayBuffer;
-        bytes?: Uint8Array | ArrayBuffer;
-      } | Uint8Array | ArrayBuffer>;
+      download?: (args: { account: string; blobName: string }) => Promise<unknown>;
       rpc?: {
         putBlob?: (args: {
           account: string;
@@ -100,13 +110,9 @@ async function createRawShelbyClient(): Promise<{
         if (typeof raw.download !== "function") {
           throw new Error("shelby download unavailable");
         }
-        const out = await raw.download(args);
-        if (out instanceof Uint8Array) return out;
-        if (out instanceof ArrayBuffer) return new Uint8Array(out);
-        const data = out?.data ?? out?.bytes;
-        if (data instanceof Uint8Array) return data;
-        if (data instanceof ArrayBuffer) return new Uint8Array(data);
-        throw new Error("shelby download returned unexpected shape");
+        const bytes = await readShelbyBlob(await raw.download(args));
+        if (!bytes) throw new Error("shelby download returned unexpected shape");
+        return bytes;
       },
       async putBlob(args) {
         if (typeof raw.rpc?.putBlob === "function") {
@@ -206,7 +212,7 @@ export type ReadLedgerEntry = {
   ts: number;
   at?: number;
   level: number;
-  source: "shelby" | "cache" | "generated";
+  source: PuzzleSourceName;
   owner?: string;
   blobName?: string;
   bytes?: number;
@@ -237,6 +243,6 @@ export function appendReadLedger(entry: ReadLedgerEntry): void {
 
 export type ShelbyUploadSigner = ShelbySigner;
 
-export function recordRead(level: number, source: "shelby" | "cache" | "generated"): void {
+export function recordRead(level: number, source: PuzzleSourceName): void {
   appendReadLedger({ ts: Date.now(), level, source });
 }
