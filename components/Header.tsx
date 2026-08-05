@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Levels", match: (p: string) => p === "/" || p.startsWith("/play") },
-  { href: "/curator", label: "Curator", match: (p: string) => p.startsWith("/curator") },
   { href: "/#leaderboard", label: "Leaderboard", match: () => false },
 ];
 
