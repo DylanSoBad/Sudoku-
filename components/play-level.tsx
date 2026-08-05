@@ -31,7 +31,7 @@ import {
 import { markCleared } from "@/lib/progress";
 import { recordRun } from "@/lib/leaderboard";
 import { bumpStreak } from "@/lib/streak";
-import { isSeasonPassActive, seasonBoardClass } from "@/lib/season-pass";
+import { isSeasonPassActive, seasonBoardClass, fetchOnChainSeasonPassActive, clearSeasonPassLocal } from "@/lib/season-pass";
 import { buildBuyHintPayload } from "@/lib/contracts";
 
 function fmt(ms: number): string {
@@ -78,6 +78,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const [notesMode, setNotesMode] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
   const [seasonActive, setSeasonActive] = useState(false);
+  /** Only true when on-chain `has_active_pass` confirms — drives discounted buy_hint. */
+  const [seasonDiscount, setSeasonDiscount] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const boardRef = useRef<SudokuBoardHandle | null>(null);
   const rewardFired = useRef(false);
@@ -85,11 +87,36 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   puzzleRef.current = puzzle;
 
   useEffect(() => {
-    const refreshPass = () => setSeasonActive(isSeasonPassActive());
-    refreshPass();
-    window.addEventListener("shelby:season-pass", refreshPass);
-    return () => window.removeEventListener("shelby:season-pass", refreshPass);
+    const refreshLocal = () => setSeasonActive(isSeasonPassActive());
+    refreshLocal();
+    window.addEventListener("shelby:season-pass", refreshLocal);
+    return () => window.removeEventListener("shelby:season-pass", refreshLocal);
   }, []);
+
+  // Prefer chain truth for the discounted hint path. LocalStorage alone caused
+  // E_PASS_INACTIVE when a stale/local pass routed to season_pass::buy_hint.
+  useEffect(() => {
+    let cancelled = false;
+    const addr = account?.address;
+    if (!addr || !registry) {
+      setSeasonDiscount(false);
+      return;
+    }
+    void fetchOnChainSeasonPassActive(addr).then((active) => {
+      if (cancelled) return;
+      if (active === true) {
+        setSeasonDiscount(true);
+        setSeasonActive(true);
+        return;
+      }
+      setSeasonDiscount(false);
+      // Stale local-only / expired on-chain pass must not keep routing to buy_hint.
+      if (active === false && isSeasonPassActive()) clearSeasonPassLocal();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [account?.address, registry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,8 +231,15 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setBuying(true);
     setError(null);
     try {
+      // Re-check chain right before signing — localStorage alone caused E_PASS_INACTIVE.
+      const onChainPass = await fetchOnChainSeasonPassActive(addr);
+      const usePass = onChainPass === true;
+      setSeasonDiscount(usePass);
+      if (usePass) setSeasonActive(true);
+      else if (onChainPass === false && isSeasonPassActive()) clearSeasonPassLocal();
+
       const pending = await signAndSubmitTransaction(
-        buildBuyHintPayload({ level, seasonPass: seasonActive }),
+        buildBuyHintPayload({ level, seasonPass: usePass }),
       );
       await waitForTxSuccess(pending.hash);
       // Only reveal after the transfer commits, so a rejected or aborted
@@ -214,7 +248,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       bumpHistory();
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       await refreshHints();
-      toast.success(seasonActive ? "Hint purchased (Season Pass)" : "Hint purchased", {
+      toast.success(usePass ? "Hint purchased (Season Pass)" : "Hint purchased", {
         description: "View transaction on explorer",
         action: {
           label: "Explorer",
@@ -238,7 +272,6 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     refreshHints,
     signAndSubmitTransaction,
     bumpHistory,
-    seasonActive,
   ]);
 
   const handleDigit = (d: number) => {
@@ -287,8 +320,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   void historyTick;
   const canUndo = boardRef.current?.canUndo() ?? false;
   const canRedo = boardRef.current?.canRedo() ?? false;
-  const hintLabel = seasonActive ? HINT_COST_PASS_LABEL : HINT_COST_LABEL;
-  const boardSkin = seasonBoardClass();
+  const hintLabel = seasonDiscount ? HINT_COST_PASS_LABEL : HINT_COST_LABEL;
+  const boardSkin = seasonDiscount || seasonActive ? seasonBoardClass() : "";
 
   return (
     <main className="relative mx-auto flex max-w-[720px] flex-col px-6 pb-20 pt-10">
@@ -312,7 +345,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
           <span className="font-mono text-[11px] text-content-muted">
             {hintCount}/{MAX_HINTS_PER_LEVEL} hints
           </span>
-          {seasonActive ? (
+          {seasonDiscount ? (
             <span className="text-[10px] font-medium uppercase tracking-wide text-accent-hover">
               Season Pass
             </span>
@@ -428,7 +461,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
                   : atHintLimit
                     ? `Hints ${MAX_HINTS_PER_LEVEL}/${MAX_HINTS_PER_LEVEL}`
                     : registry
-                      ? `Hint · ${hintLabel}${seasonActive ? " · pass" : ""}`
+                      ? `Hint · ${hintLabel}${seasonDiscount ? " · pass" : ""}`
                       : "Free hint"}
               </Button>
             </div>
