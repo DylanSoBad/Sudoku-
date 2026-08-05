@@ -17,6 +17,7 @@ import { explorerTxUrl } from "@/lib/utils";
 import {
   economicsForLevel,
   HINT_COST_LABEL,
+  HINT_COST_PASS_LABEL,
   MAX_HINTS_PER_LEVEL,
   MAX_LEVEL,
 } from "@/lib/tokenomics";
@@ -30,6 +31,8 @@ import {
 import { markCleared } from "@/lib/progress";
 import { recordRun } from "@/lib/leaderboard";
 import { bumpStreak } from "@/lib/streak";
+import { isSeasonPassActive, seasonBoardClass } from "@/lib/season-pass";
+import { buildBuyHintPayload } from "@/lib/contracts";
 
 function fmt(ms: number): string {
   const total = Math.round(ms / 1000);
@@ -74,11 +77,19 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const [isSolved, setIsSolved] = useState(false);
   const [notesMode, setNotesMode] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
+  const [seasonActive, setSeasonActive] = useState(false);
   const startedAt = useRef<number>(Date.now());
   const boardRef = useRef<SudokuBoardHandle | null>(null);
   const rewardFired = useRef(false);
   const puzzleRef = useRef<FetchedPuzzle | null>(null);
   puzzleRef.current = puzzle;
+
+  useEffect(() => {
+    const refreshPass = () => setSeasonActive(isSeasonPassActive());
+    refreshPass();
+    window.addEventListener("shelby:season-pass", refreshPass);
+    return () => window.removeEventListener("shelby:season-pass", refreshPass);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,13 +204,9 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setBuying(true);
     setError(null);
     try {
-      const pending = await signAndSubmitTransaction({
-        data: {
-          function: `${registry}::hint_shop::buy_hint`,
-          typeArguments: [],
-          functionArguments: [level],
-        },
-      });
+      const pending = await signAndSubmitTransaction(
+        buildBuyHintPayload({ level, seasonPass: seasonActive }),
+      );
       await waitForTxSuccess(pending.hash);
       // Only reveal after the transfer commits, so a rejected or aborted
       // transaction never yields a free hint.
@@ -207,7 +214,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       bumpHistory();
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       await refreshHints();
-      toast.success("Hint purchased", {
+      toast.success(seasonActive ? "Hint purchased (Season Pass)" : "Hint purchased", {
         description: "View transaction on explorer",
         action: {
           label: "Explorer",
@@ -231,6 +238,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     refreshHints,
     signAndSubmitTransaction,
     bumpHistory,
+    seasonActive,
   ]);
 
   const handleDigit = (d: number) => {
@@ -279,6 +287,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   void historyTick;
   const canUndo = boardRef.current?.canUndo() ?? false;
   const canRedo = boardRef.current?.canRedo() ?? false;
+  const hintLabel = seasonActive ? HINT_COST_PASS_LABEL : HINT_COST_LABEL;
+  const boardSkin = seasonBoardClass();
 
   return (
     <main className="relative mx-auto flex max-w-[720px] flex-col px-6 pb-20 pt-10">
@@ -302,6 +312,11 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
           <span className="font-mono text-[11px] text-content-muted">
             {hintCount}/{MAX_HINTS_PER_LEVEL} hints
           </span>
+          {seasonActive ? (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-accent-hover">
+              Season Pass
+            </span>
+          ) : null}
         </div>
       </header>
 
@@ -317,11 +332,18 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
         <>
           <div className="flex justify-center">
             <div
-              className="rounded-xl border border-line-strong/80 bg-surface p-3 sm:p-4"
-              style={{
-                boxShadow:
-                  "0 0 0 1px rgba(139,92,246,0.08), 0 24px 48px -24px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.03)",
-              }}
+              className={cn(
+                "rounded-xl border border-line-strong/80 bg-surface p-3 sm:p-4",
+                boardSkin,
+              )}
+              style={
+                boardSkin
+                  ? undefined
+                  : {
+                      boxShadow:
+                        "0 0 0 1px rgba(139,92,246,0.08), 0 24px 48px -24px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.03)",
+                    }
+              }
             >
               <SudokuBoard
                 ref={boardRef}
@@ -406,7 +428,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
                   : atHintLimit
                     ? `Hints ${MAX_HINTS_PER_LEVEL}/${MAX_HINTS_PER_LEVEL}`
                     : registry
-                      ? `Hint · ${HINT_COST_LABEL}`
+                      ? `Hint · ${hintLabel}${seasonActive ? " · pass" : ""}`
                       : "Free hint"}
               </Button>
             </div>

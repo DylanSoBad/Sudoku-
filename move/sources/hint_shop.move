@@ -4,8 +4,9 @@
 /// decimals on testnet (verified against the FA metadata object), so
 /// 1 sUSD = 1e8 raw:
 ///   hint cost = 0.0005 sUSD = 50_000 raw
+///   season-pass hint = 0.00025 sUSD = 25_000 raw (via season_pass::buy_hint)
 ///
-/// Fee split (of HINT_COST_RAW):
+/// Fee split (of charged amount):
 ///   50% treasury (Shop.treasury)
 ///   30% curator (@sudoku)
 ///   20% burn sink (fixed address — not a protocol burn)
@@ -20,6 +21,8 @@ module sudoku::hint_shop {
     use aptos_std::table::{Self, Table};
     use std::signer;
 
+    friend sudoku::season_pass;
+
     // FA metadata object address for shelbyUSD on testnet.
     const HARDCODED_SHELBY_USD_METADATA: address = @0x1b18363a9f1fe5e6ebf247daba5cc1c18052bb232efdc4c50f556053922d98e1;
 
@@ -29,9 +32,8 @@ module sudoku::hint_shop {
 
     /// Flat hint price in raw sUSD (8 decimals) = 0.0005 sUSD.
     const HINT_COST_RAW: u64 = 50_000;
-    const TREASURY_SHARE_RAW: u64 = 25_000;
-    const CURATOR_SHARE_RAW: u64 = 15_000;
-    const BURN_SHARE_RAW: u64 = 10_000;
+    /// Season-pass discounted price = half = 0.00025 sUSD.
+    const HINT_COST_PASS_RAW: u64 = 25_000;
 
     /// Hints a single player may buy on one level.
     const MAX_HINTS_PER_LEVEL: u64 = 5;
@@ -63,6 +65,10 @@ module sudoku::hint_shop {
     /// Flat hint price, raw sUSD (8 decimals).
     public fun price_for(_level: u64): u64 {
         HINT_COST_RAW
+    }
+
+    public fun pass_price_raw(): u64 {
+        HINT_COST_PASS_RAW
     }
 
     /// Address that receives the treasury share (and season-pass payments).
@@ -108,25 +114,37 @@ module sudoku::hint_shop {
         MAX_HINTS_PER_LEVEL
     }
 
-    public entry fun buy_hint(buyer: &signer, level: u64) acquires Shop, HintUsage {
+    /// Charge `amount` with a 50/30/20 split and bump the per-level counter.
+    /// Only callable by this module and `season_pass` (discounted path).
+    public(friend) fun buy_hint_priced(
+        buyer: &signer,
+        level: u64,
+        amount: u64,
+    ) acquires Shop, HintUsage {
         let buyer_addr = signer::address_of(buyer);
         let used = read_count(borrow_global<HintUsage>(@sudoku), buyer_addr, level);
         assert!(used < MAX_HINTS_PER_LEVEL, EHINT_LIMIT_REACHED);
 
         let metadata = shelby_usd_metadata();
         let treasury = borrow_global<Shop>(@sudoku).treasury;
-        // 50 / 30 / 20 split of HINT_COST_RAW.
-        primary_fungible_store::transfer(buyer, metadata, treasury, TREASURY_SHARE_RAW);
-        primary_fungible_store::transfer(buyer, metadata, @sudoku, CURATOR_SHARE_RAW);
-        primary_fungible_store::transfer(buyer, metadata, BURN_SINK, BURN_SHARE_RAW);
+        let treasury_amt = amount / 2;
+        let curator_amt = amount * 3 / 10;
+        let burn_amt = amount - treasury_amt - curator_amt;
+        primary_fungible_store::transfer(buyer, metadata, treasury, treasury_amt);
+        primary_fungible_store::transfer(buyer, metadata, @sudoku, curator_amt);
+        primary_fungible_store::transfer(buyer, metadata, BURN_SINK, burn_amt);
 
         let usage = borrow_global_mut<HintUsage>(@sudoku);
         let count_after = bump_count(usage, buyer_addr, level);
         event::emit(HintPurchased {
             buyer: buyer_addr,
             level,
-            amount: HINT_COST_RAW,
+            amount,
             count_after,
         });
+    }
+
+    public entry fun buy_hint(buyer: &signer, level: u64) acquires Shop, HintUsage {
+        buy_hint_priced(buyer, level, HINT_COST_RAW);
     }
 }

@@ -21,6 +21,9 @@ export const HINT_COST_RAW = 50_000;
 /** Display labels, kept here so UI copy cannot drift from the constants. */
 export const REWARD_LABEL = `${REWARD_PER_LEVEL_SUSD} sUSD`;
 export const HINT_COST_LABEL = `${HINT_COST_SUSD} sUSD`;
+/** Season-pass half-price label (matches on-chain `pass_price_raw`). */
+export const HINT_COST_PASS_SUSD = HINT_COST_SUSD * 0.5;
+export const HINT_COST_PASS_LABEL = `${HINT_COST_PASS_SUSD} sUSD`;
 
 /** Difficulty and grid shape per level — unchanged by the flat pricing. */
 export interface LevelEconomics {

@@ -4,6 +4,9 @@
 /// hint_shop treasury. The `price_micro` argument is accepted for ABI
 /// compatibility with existing clients but is ignored — the on-chain
 /// constant is the source of truth.
+///
+/// Active pass holders buy hints via `season_pass::buy_hint` at half price
+/// (avoids a circular Move dependency: season_pass → hint_shop already).
 module sudoku::season_pass {
     use std::signer;
     use std::vector;
@@ -16,6 +19,7 @@ module sudoku::season_pass {
 
     const E_NOT_INITIALIZED: u64 = 1;
     const E_ALREADY_ACTIVE: u64 = 2;
+    const E_PASS_INACTIVE: u64 = 3;
 
     /// Default 30 days in seconds.
     const PASS_DURATION_SECS: u64 = 30 * 24 * 60 * 60;
@@ -45,6 +49,33 @@ module sudoku::season_pass {
 
     fun shelby_usd_metadata(): Object<Metadata> {
         object::address_to_object<Metadata>(HARDCODED_SHELBY_USD_METADATA)
+    }
+
+    fun find_expiry(store: &PassStore, owner: address): u64 {
+        let i = 0;
+        let n = vector::length(&store.owners);
+        while (i < n) {
+            if (*vector::borrow(&store.owners, i) == owner) {
+                return *vector::borrow(&store.expires_at, i)
+            };
+            i = i + 1;
+        };
+        0
+    }
+
+    #[view]
+    public fun has_active_pass(owner: address): bool acquires PassStore {
+        if (!exists<PassStore>(@sudoku)) return false;
+        let store = borrow_global<PassStore>(@sudoku);
+        let expires = find_expiry(store, owner);
+        expires > timestamp::now_seconds()
+    }
+
+    #[view]
+    public fun expires_at(owner: address): u64 acquires PassStore {
+        if (!exists<PassStore>(@sudoku)) return 0;
+        let store = borrow_global<PassStore>(@sudoku);
+        find_expiry(store, owner)
     }
 
     /// Charge PRICE_RAW shelbyUSD and extend / create a 30-day pass.
@@ -94,5 +125,12 @@ module sudoku::season_pass {
             price_micro: PRICE_RAW,
             expires_at: expires,
         });
+    }
+
+    /// Buy a hint at half price while the pass is active.
+    public entry fun buy_hint(player: &signer, level: u64) acquires PassStore {
+        let addr = signer::address_of(player);
+        assert!(has_active_pass(addr), E_PASS_INACTIVE);
+        hint_shop::buy_hint_priced(player, level, hint_shop::pass_price_raw());
     }
 }

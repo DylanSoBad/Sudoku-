@@ -197,10 +197,10 @@ const en: Dict = {
   },
   seasonPass: {
     title: "Season Pass",
-    description: "5 shelbyUSD / 30 days — half-price hints + board skin",
+    description: "0.1 shelbyUSD / 30 days — half-price hints + board skin",
     buy: "Buy pass",
     activeUntil: "Active until",
-    benefits: "Hint ×2 pricing · Season board skin",
+    benefits: "Hints at half price · Season board skin",
     localPurchase: "Local pass (deploy Move for on-chain purchase)",
   },
   tokenomics: {
@@ -306,7 +306,7 @@ const vi: Dict = {
   },
   seasonPass: {
     title: "Season Pass",
-    description: "5 shelbyUSD / 30 ngày — gợi ý nửa giá + skin bàn",
+    description: "0.1 shelbyUSD / 30 ngày — gợi ý nửa giá + skin bàn",
     buy: "Mua pass",
     activeUntil: "Hết hạn",
     benefits: "Gợi ý nửa giá · Skin bàn mùa",

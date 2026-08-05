@@ -25,18 +25,22 @@ function toHexBytes(input: string | Uint8Array): string {
 
 export interface BuyHintArgs {
   level: number;
-  /** Unused: `hint_shop::buy_hint` derives the price on-chain from `level`. */
+  /** When true, charge half price via `season_pass::buy_hint` (requires active pass). */
+  seasonPass?: boolean;
+  /** Unused: on-chain price is derived from the entry chosen above. */
   sessionId?: string;
-  /** Unused: `hint_shop::buy_hint` derives the price on-chain from `level`. */
+  /** Unused: on-chain price is derived from the entry chosen above. */
   priceShelbyUSDMicro?: number;
 }
 
-/** Build wallet-adapter payload for `hint_shop::buy_hint(level: u64)`. */
+/** Build wallet-adapter payload for a hint purchase (full or season-pass half). */
 export function buildBuyHintPayload(args: BuyHintArgs): InputTransactionData {
   const mod = registryAddress();
   return {
     data: {
-      function: `${mod}::hint_shop::buy_hint`,
+      function: args.seasonPass
+        ? `${mod}::season_pass::buy_hint`
+        : `${mod}::hint_shop::buy_hint`,
       typeArguments: [],
       functionArguments: [args.level],
     },
