@@ -59,6 +59,7 @@ export function WalletBadge() {
   if (!account) {
     return (
       <Button
+        data-tour="wallet"
         size="sm"
         variant="primary"
         onClick={() => connect("Petra" as unknown as Parameters<typeof connect>[0])}
@@ -69,7 +70,10 @@ export function WalletBadge() {
   }
 
   return (
-    <div className="flex items-center divide-x divide-line rounded-md border border-line bg-surface-2 text-xs">
+    <div
+      data-tour="wallet"
+      className="flex items-center divide-x divide-line rounded-md border border-line bg-surface-2 text-xs"
+    >
       <button
         type="button"
         onClick={copyAddress}

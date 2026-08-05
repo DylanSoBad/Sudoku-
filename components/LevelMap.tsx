@@ -25,7 +25,7 @@ export function LevelMap() {
   );
 
   return (
-    <section aria-labelledby="level-map-title" className="scroll-mt-20">
+    <section aria-labelledby="level-map-title" className="scroll-mt-20" data-tour="levels">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <h2

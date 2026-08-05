@@ -5,7 +5,8 @@ import { isOnboarded, setOnboarded } from "@/lib/preferences";
 import { useT } from "@/components/app-providers";
 import { Button } from "@/components/ui/button";
 
-const STEPS = ["wallet", "faucet", "play-l1"] as const;
+/** Targets must exist as `data-tour` on the live homepage. */
+const STEPS = ["wallet", "levels", "play-l1"] as const;
 
 export function OnboardingTour() {
   const t = useT();
@@ -64,10 +65,7 @@ export function OnboardingTour() {
     : null;
 
   const tipTop = spotlight
-    ? Math.min(
-        window.innerHeight - 200,
-        spotlight.top + spotlight.height + 12,
-      )
+    ? Math.min(window.innerHeight - 200, spotlight.top + spotlight.height + 12)
     : window.innerHeight / 2 - 80;
   const tipLeft = spotlight
     ? Math.min(window.innerWidth - 320, Math.max(16, spotlight.left))
@@ -94,7 +92,7 @@ export function OnboardingTour() {
         <p className="font-mono text-xs text-content-subtle">
           {step + 1} / {STEPS.length}
         </p>
-        <h3 className="mt-1 text-lg font-semibold text-content">{titles[step]}</h3>
+        <h3 className="mt-1 font-display text-lg font-semibold text-content">{titles[step]}</h3>
         <p className="mt-2 text-sm text-content-muted">{bodies[step]}</p>
         <div className="mt-4 flex justify-between gap-2">
           <Button variant="ghost" size="sm" onClick={finish}>

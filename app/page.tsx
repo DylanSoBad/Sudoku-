@@ -36,6 +36,7 @@ export default function HomePage() {
             <div className="animate-fade-up-delay-3 mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="/play/1"
+                data-tour="play-l1"
                 className="inline-flex h-11 items-center rounded-md bg-accent px-6 text-sm font-semibold text-white transition-colors duration-150 hover:bg-accent-hover"
               >
                 Play level 1

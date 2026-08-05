@@ -46,6 +46,9 @@ export function recordRun(address: string, level: number, ms: number, hintsUsed?
     source: source ?? "local",
   });
   save(all);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("shelby:leaderboard"));
+  }
 }
 
 export function topForLevel(level: number, limit = 10): Entry[] {
