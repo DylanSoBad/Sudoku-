@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings tests/sudoku.test.ts",
     "seed:puzzles": "node scripts/seed-puzzles.mjs",
-    "seed:daily": "node scripts/seed-puzzles.mjs --daily-only"
+    "seed:daily": "node scripts/seed-puzzles.mjs --daily-only",
+    "icons": "node scripts/gen-icons.mjs"
   },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.2.1",
@@ -32,6 +33,7 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "postcss": "^8.4.39",
+    "sharp": "^0.35.3",
     "tailwindcss": "^3.4.7",
     "typescript": "^5.5.0"
   },

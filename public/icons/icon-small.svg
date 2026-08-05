@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Sudoku on Shelby">
+  <defs>
+    <clipPath id="tile-small">
+      <rect width="128" height="128" rx="26"/>
+    </clipPath>
+  </defs>
+
+  <!-- Favicon-size variant: the 9x9 lines of icon.svg turn to mud below 48px,
+       so only the block grid and the accent cell survive here. -->
+  <g clip-path="url(#tile-small)">
+    <rect width="128" height="128" fill="#0b0b0d"/>
+    <rect x="43" y="43" width="42" height="42" fill="#a78bfa"/>
+    <g stroke="#a1a1aa" stroke-width="7">
+      <path d="M43 0v128M85 0v128"/>
+      <path d="M0 43h128M0 85h128"/>
+    </g>
+  </g>
+
+  <rect x="2" y="2" width="124" height="124" rx="24" fill="none" stroke="#52525b" stroke-width="4"/>
+</svg>

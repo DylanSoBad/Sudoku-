@@ -1,8 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Sudoku on Shelby">
-  <rect width="128" height="128" rx="24" fill="#07080d"/>
-  <rect x="16" y="16" width="96" height="96" rx="8" fill="none" stroke="#6ee7ff" stroke-width="4"/>
-  <path d="M48 16v96M80 16v96M16 48h96M16 80h96" stroke="#1e2338" stroke-width="3"/>
-  <circle cx="64" cy="64" r="10" fill="#a855f7"/>
-  <text x="32" y="42" font-family="ui-monospace,monospace" font-size="18" fill="#6ee7ff" font-weight="700">9</text>
-  <text x="88" y="98" font-family="ui-monospace,monospace" font-size="18" fill="#fbbf24" font-weight="700">1</text>
+  <defs>
+    <clipPath id="tile">
+      <rect width="128" height="128" rx="28"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#tile)">
+    <rect width="128" height="128" fill="#0b0b0d"/>
+
+    <!-- Faint 9x9 cell lines: blur into grid texture at favicon sizes. -->
+    <g stroke="#2c2c31" stroke-width="1.5">
+      <path d="M15 0v128M29 0v128M57 0v128M71 0v128M99 0v128M113 0v128"/>
+      <path d="M0 15h128M0 29h128M0 57h128M0 71h128M0 99h128M0 113h128"/>
+    </g>
+
+    <!-- Block lines carry the sudoku read once the fine grid disappears. -->
+    <g stroke="#71717a" stroke-width="4">
+      <path d="M43 0v128M85 0v128"/>
+      <path d="M0 43h128M0 85h128"/>
+    </g>
+
+    <rect x="15" y="15" width="14" height="14" fill="#8b5cf6" opacity="0.45"/>
+    <rect x="99" y="99" width="14" height="14" fill="#8b5cf6" opacity="0.45"/>
+    <rect x="43" y="43" width="42" height="42" fill="#8b5cf6" opacity="0.12"/>
+    <rect x="57" y="57" width="14" height="14" fill="#a78bfa"/>
+  </g>
+
+  <rect x="1.5" y="1.5" width="125" height="125" rx="26.5" fill="none" stroke="#3f3f46" stroke-width="3"/>
 </svg>

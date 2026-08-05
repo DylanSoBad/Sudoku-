@@ -21,11 +21,13 @@ export function Header() {
       <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-6 px-6">
         <div className="flex items-center gap-2.5">
           <Link href="/" className="group flex items-center gap-2.5">
+            {/* unoptimized: the image optimizer rejects SVG unless dangerouslyAllowSVG is on. */}
             <Image
-              src="/icons/icon.svg"
+              src="/icons/icon.svg?v=3"
               alt=""
               width={28}
               height={28}
+              unoptimized
               className="h-7 w-7 rounded-md ring-1 ring-line transition-transform duration-200 group-hover:scale-[1.04]"
               priority
             />

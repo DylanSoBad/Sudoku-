@@ -36,11 +36,12 @@ export const metadata: Metadata = {
   // carries a version query that must be bumped when the artwork changes.
   icons: {
     icon: [
-      { url: "/favicon.ico?v=2", sizes: "any" },
-      { url: "/favicon-32x32.png?v=2", type: "image/png", sizes: "32x32" },
-      { url: "/favicon-16x16.png?v=2", type: "image/png", sizes: "16x16" },
+      { url: "/favicon.ico?v=3", sizes: "any" },
+      { url: "/favicon-32x32.png?v=3", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-16x16.png?v=3", type: "image/png", sizes: "16x16" },
+      { url: "/icons/icon.svg?v=3", type: "image/svg+xml" },
     ],
-    apple: [{ url: "/apple-touch-icon.png?v=2", sizes: "180x180" }],
+    apple: [{ url: "/apple-touch-icon.png?v=3", sizes: "180x180" }],
   },
   manifest: "/manifest.webmanifest",
 };
