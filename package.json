@@ -14,6 +14,7 @@
     "icons": "node scripts/gen-icons.mjs",
     "shelby:check": "node scripts/check-shelby-blob.mjs",
     "shelby:funds": "node scripts/check-shelby-funds.mjs",
+    "shelby:token": "node scripts/verify-shelbyusd.mjs",
     "shelby:fund": "node scripts/shelby-fund-and-upload.mjs",
     "claim:keygen": "node scripts/gen-claim-signer.mjs",
     "claim:verify": "node scripts/verify-claim-signer.mjs",
