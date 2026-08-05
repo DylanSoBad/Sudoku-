@@ -11,7 +11,10 @@
     "test": "node --test --experimental-strip-types --no-warnings tests/sudoku.test.ts",
     "seed:puzzles": "node scripts/seed-puzzles.mjs",
     "seed:daily": "node scripts/seed-puzzles.mjs --daily-only",
-    "icons": "node scripts/gen-icons.mjs"
+    "icons": "node scripts/gen-icons.mjs",
+    "claim:keygen": "node scripts/gen-claim-signer.mjs",
+    "claim:verify": "node scripts/verify-claim-signer.mjs",
+    "claim:check": "node scripts/check-claim-route.mjs"
   },
   "dependencies": {
     "@aptos-labs/ts-sdk": "^5.2.1",

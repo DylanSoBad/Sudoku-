@@ -76,6 +76,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const [buying, setBuying] = useState(false);
   const [rewardOpen, setRewardOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [solvedBoard, setSolvedBoard] = useState<number[] | null>(null);
+  const [solveMs, setSolveMs] = useState<number | null>(null);
   const [isSolved, setIsSolved] = useState(false);
   const [notesMode, setNotesMode] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
@@ -127,6 +129,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setIsSolved(false);
     setNotesMode(false);
     setHistoryTick(0);
+    setSolvedBoard(null);
+    setSolveMs(null);
     rewardFired.current = false;
     fetchPuzzle(level)
       .then((p) => {
@@ -169,6 +173,9 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     if (rewardFired.current) return;
     rewardFired.current = true;
     setIsSolved(true);
+    // The solved grid is what the claim-ticket endpoint verifies.
+    setSolvedBoard(boardRef.current?.getBoard() ?? null);
+    setSolveMs(Date.now() - startedAt.current);
     setRewardOpen(true);
     if (account?.address) {
       // Campaign progress is HMAC-local; daily does not unlock campaign levels.
@@ -517,8 +524,9 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
             setRewardOpen(false);
           }}
           level={level}
-          ms={elapsedMs}
+          ms={solveMs ?? elapsedMs}
           hints={hintCount}
+          board={solvedBoard}
         />
       )}
     </main>

@@ -10,9 +10,17 @@ module sudoku::nft_badge {
     use aptos_framework::object;
     use aptos_token_objects::collection;
     use aptos_token_objects::token;
+    use sudoku::rewards;
 
     const E_ALREADY_MINTED: u64 = 1;
     const E_NOT_INITIALIZED: u64 = 2;
+    /// Milestone level has no recorded reward claim for this wallet.
+    const E_LEVEL_NOT_CLEARED: u64 = 3;
+    const E_INPUT_TOO_LONG: u64 = 4;
+
+    const MAX_MILESTONE_ID_LEN: u64 = 64;
+    const MAX_METADATA_BLOB_LEN: u64 = 256;
+    const MAX_LEVEL: u16 = 20;
 
     const COLLECTION_NAME: vector<u8> = b"Sudoku on Shelby";
     const COLLECTION_DESC: vector<u8> = b"Milestone badges for Sudoku on Shelby";
@@ -131,6 +139,11 @@ module sudoku::nft_badge {
     ) acquires BadgeStore {
         let addr = signer::address_of(player);
         assert!(exists<BadgeStore>(@sudoku), E_NOT_INITIALIZED);
+        assert!(vector::length(&milestone_id) <= MAX_MILESTONE_ID_LEN, E_INPUT_TOO_LONG);
+        assert!(vector::length(&metadata_blob) <= MAX_METADATA_BLOB_LEN, E_INPUT_TOO_LONG);
+        assert!(level <= MAX_LEVEL, E_LEVEL_NOT_CLEARED);
+        // A badge is only real if the level's reward was actually claimed.
+        assert!(rewards::has_claimed(addr, (level as u64)), E_LEVEL_NOT_CLEARED);
         let store = borrow_global_mut<BadgeStore>(@sudoku);
         assert!(!already_has(store, addr, &milestone_id), E_ALREADY_MINTED);
 

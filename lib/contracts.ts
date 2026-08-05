@@ -71,6 +71,35 @@ export function buildClaimRewardPayload(args: ClaimRewardArgs): InputTransaction
   };
 }
 
+export interface ClaimTicket {
+  level: number;
+  expiresAt: number;
+  /** u64 as a decimal string — outside safe-integer range. */
+  nonce: string;
+  /** 0x-prefixed 64-byte Ed25519 signature. */
+  signature: string;
+}
+
+/**
+ * Build payload for `rewards::claim_with_proof`. The ticket comes from
+ * `/api/claim-ticket`, which only signs a verified solved grid.
+ */
+export function buildClaimWithProofPayload(ticket: ClaimTicket): InputTransactionData {
+  const mod = registryAddress();
+  return {
+    data: {
+      function: `${mod}::rewards::claim_with_proof`,
+      typeArguments: [],
+      functionArguments: [
+        ticket.level,
+        String(ticket.expiresAt),
+        ticket.nonce,
+        ticket.signature,
+      ],
+    },
+  };
+}
+
 export interface RegisterPuzzleArgs {
   level: number;
   blobName: string;

@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import type { InputTransactionData } from "@aptos-labs/wallet-adapter-react";
 import { registryAddress, waitForTxSuccess } from "@/lib/aptos";
 import { awardMilestonesForLevel } from "@/lib/award-badges";
+import { buildClaimWithProofPayload, type ClaimTicket } from "@/lib/contracts";
 import { toast } from "sonner";
 
 export interface RewardModalProps {
@@ -23,7 +24,49 @@ export interface RewardModalProps {
   level: number;
   ms: number;
   hints: number;
+  /** Solved grid, submitted to the verifier to obtain a signed claim ticket. */
+  board?: number[] | null;
   txHash?: string;
+}
+
+function isClaimTicket(v: unknown): v is ClaimTicket {
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o["level"] === "number" &&
+    typeof o["expiresAt"] === "number" &&
+    typeof o["nonce"] === "string" &&
+    typeof o["signature"] === "string"
+  );
+}
+
+/**
+ * Ask the verifier to sign a claim ticket for this solve. Returns null when the
+ * server has no signer configured, which means the legacy unauthenticated
+ * `rewards::claim` is still the intended path.
+ */
+async function requestTicket(
+  address: string,
+  level: number,
+  board: number[],
+  elapsedMs: number,
+): Promise<ClaimTicket | null> {
+  const res = await fetch("/api/claim-ticket", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ address, level, board, elapsedMs }),
+  });
+  if (res.status === 501) return null;
+  const payload: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message =
+      typeof payload === "object" && payload !== null
+        ? String((payload as Record<string, unknown>)["error"] ?? "")
+        : "";
+    throw new Error(message || `claim verification failed (${res.status})`);
+  }
+  if (!isClaimTicket(payload)) throw new Error("malformed claim ticket");
+  return payload;
 }
 
 function pad2(n: number): string {
@@ -34,7 +77,15 @@ function shortHash(hash: string): string {
   return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
 }
 
-export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardModalProps) {
+export function RewardModal({
+  open,
+  onClose,
+  level,
+  ms,
+  hints,
+  board,
+  txHash,
+}: RewardModalProps) {
   const router = useRouter();
   const { account, signAndSubmitTransaction } = useWallet();
   const [claiming, setClaiming] = useState(false);
@@ -74,14 +125,21 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
     setClaiming(true);
     setClaimError(undefined);
     try {
-      const txInput: InputTransactionData = {
-        data: {
-          function: `${registry}::rewards::claim`,
-          typeArguments: [],
-          // Level 0 = daily (2x on-chain). Campaign levels 1–20 = flat 0.01.
-          functionArguments: [level],
-        },
-      };
+      const ticket =
+        board && board.length === 81
+          ? await requestTicket(account.address, level, board, ms)
+          : null;
+
+      // Level 0 = daily (2x on-chain). Campaign levels 1–20 = flat 0.01.
+      const txInput: InputTransactionData = ticket
+        ? buildClaimWithProofPayload(ticket)
+        : {
+            data: {
+              function: `${registry}::rewards::claim`,
+              typeArguments: [],
+              functionArguments: [level],
+            },
+          };
       const pending = await signAndSubmitTransaction(txInput);
       await waitForTxSuccess(pending.hash);
       setClaimed(true);
@@ -103,7 +161,14 @@ export function RewardModal({ open, onClose, level, ms, hints, txHash }: RewardM
       window.dispatchEvent(new CustomEvent("shelby:balances"));
       goNext();
     } catch (e) {
-      setClaimError((e as Error).message ?? "Transaction failed");
+      const raw = (e as Error).message ?? "Transaction failed";
+      // rewards.move: E_PROOF_REQUIRED — the verifier is not reachable, so the
+      // chain refuses the legacy path rather than paying an unverified solve.
+      setClaimError(
+        raw.includes("1004")
+          ? "Claim verification is unavailable right now — try again shortly."
+          : raw,
+      );
     } finally {
       setClaiming(false);
     }

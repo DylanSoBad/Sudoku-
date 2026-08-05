@@ -35,6 +35,8 @@ Open <http://localhost:3000>.
 | NEXT_PUBLIC_APTOS_FAUCET_URL            | Default https://faucet.testnet.aptoslabs.com        |
 | NEXT_PUBLIC_SHELBYUSD_FAUCET_URL        | Default https://faucet.shelby.xyz/shelbyusd         |
 | NEXT_PUBLIC_PROGRESS_SALT               | HMAC salt for casual anti-cheat on level progress   |
+| CLAIM_SIGNER_PRIVATE_KEY                | Server-only Ed25519 key that signs reward claims    |
+| CURATOR_GATE_SECRET                     | Server-only gate for `/curator`                     |
 
 Never commit `.env.local`.
 
@@ -47,6 +49,9 @@ Never commit `.env.local`.
 | npm run typecheck | tsc --noEmit                                    |
 | npm test          | Sudoku generator / codec unit tests (node:test) |
 | npm start         | Serve production build on 3000                  |
+| npm run claim:keygen | Create the claim signer key in `.env.local`   |
+| npm run claim:verify | Check the signer against on-chain ClaimGuard  |
+| npm run claim:check  | Smoke-test `/api/claim-ticket` (needs dev server) |
 
 ## Deploy Move package
 
@@ -81,6 +86,28 @@ shelbyUSD reports **8 decimals** on testnet, so the on-chain raw amounts are
 - **SSR-safe Shelby**: `@shelby-protocol/sdk/browser` is dynamic-imported only in the browser; failures log `[shelby:fallback]` and use the deterministic generator.
 - **Blob layout**: `<JSON header>\n` + 81 puzzle bytes + 81 solution bytes.
 - **Progress**: `localStorage` key `shelby-sudoku-progress`, HMAC-SHA-256 over `address:level` with `NEXT_PUBLIC_PROGRESS_SALT` (public salt — casual anti-tamper only).
+
+### Reward claim authorisation
+
+The blob ships the solution, so "player solved it" cannot be proven on-chain.
+Payouts are gated by an off-chain verifier instead:
+
+1. `/api/claim-ticket` checks the submitted grid is solved, keeps the level's
+   givens and took at least 10s, then signs `(address, level, expiresAt, nonce)`
+   with `CLAIM_SIGNER_PRIVATE_KEY`.
+2. `rewards::claim_with_proof` verifies that signature against
+   `ClaimGuard.verifier`, rejects reused nonces and expired tickets, then pays.
+3. `rewards::ClaimGuard` also caps **all** treasury outflow (claims and
+   referral bonuses) on a rolling 24h budget, so a leaked signer key or a sybil
+   farm cannot empty the treasury in one pass.
+
+Rollout order matters: set `CLAIM_SIGNER_PRIVATE_KEY` in the host environment
+**before** `rewards::set_require_proof(true)`, otherwise every claim fails
+closed with `E_PROOF_REQUIRED` (1004).
+
+Two follow-on gates depend on a recorded claim: `referral::register` requires
+the referee to have claimed a level (and caps a referrer at 25 paid referrals),
+and `nft_badge::mint_milestone` requires the badge's level to be claimed.
 
 ## References
 
