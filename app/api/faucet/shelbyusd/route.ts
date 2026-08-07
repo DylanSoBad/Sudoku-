@@ -33,7 +33,7 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ ok: false, error: "faucet disabled" }, { status: 403 });
   }
 
-  const limited = rateLimit(clientKey(req, "susd-faucet"), 3, 60 * 60 * 1000);
+  const limited = await rateLimit(clientKey(req, "susd-faucet"), 3, 60 * 60 * 1000);
   if (!limited.ok) {
     return NextResponse.json(
       { ok: false, error: "rate limited — try again later" },

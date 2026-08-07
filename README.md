@@ -38,8 +38,21 @@ Open <http://localhost:3000>.
 | NEXT_PUBLIC_PROGRESS_SALT               | HMAC salt for casual anti-cheat on level progress   |
 | CLAIM_SIGNER_PRIVATE_KEY                | Server-only Ed25519 key that signs reward claims    |
 | CURATOR_GATE_SECRET                     | Server-only gate for `/curator`                     |
+| UPSTASH_REDIS_REST_URL                  | Shared rate-limit store (optional, see below)        |
+| UPSTASH_REDIS_REST_TOKEN                | Shared rate-limit store (optional, see below)        |
 
 Never commit `.env.local`.
+
+### Rate limiting
+
+`/api/faucet/*`, `/api/claim-ticket` and `/api/blob/[name]` are rate limited by
+`lib/server/rate-limit.ts`. With `UPSTASH_REDIS_REST_URL` and
+`UPSTASH_REDIS_REST_TOKEN` set, counters live in Upstash Redis and are shared
+across every Vercel lambda. Without them the limiter keeps a per-process map:
+fine locally, but on a serverless deploy each cold instance starts with an empty
+budget, so the effective limit is far higher than the configured number. Set the
+pair in production — the free tier covers this app's volume. A Redis outage
+falls back to the in-memory counter rather than failing the request.
 
 ## Scripts
 

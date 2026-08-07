@@ -49,7 +49,7 @@ export async function GET(req: Request, { params }: { params: { name: string } }
     return NextResponse.json({ error: "invalid blob name" }, { status: 400 });
   }
 
-  const gate = rateLimit(clientKey(req, "blob"), IP_LIMIT, LIMIT_WINDOW_MS);
+  const gate = await rateLimit(clientKey(req, "blob"), IP_LIMIT, LIMIT_WINDOW_MS);
   if (!gate.ok) {
     return NextResponse.json(
       { error: "rate limited" },

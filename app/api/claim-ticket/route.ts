@@ -154,7 +154,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const ipGate = rateLimit(clientKey(req, "claim-ticket"), IP_LIMIT, LIMIT_WINDOW_MS);
+  const ipGate = await rateLimit(clientKey(req, "claim-ticket"), IP_LIMIT, LIMIT_WINDOW_MS);
   if (!ipGate.ok) {
     return NextResponse.json(
       { error: "rate limited" },
@@ -193,7 +193,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "solve too fast" }, { status: 400 });
   }
 
-  const addrGate = rateLimit(`addr:${address}`, ADDR_LIMIT, LIMIT_WINDOW_MS);
+  const addrGate = await rateLimit(`addr:${address}`, ADDR_LIMIT, LIMIT_WINDOW_MS);
   if (!addrGate.ok) {
     return NextResponse.json(
       { error: "rate limited" },
