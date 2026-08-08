@@ -28,7 +28,8 @@ export function WalletBadge() {
   const [balances, setBalances] = useState<Balances>({ apt: 0, shelbyUSD: 0 });
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const address = account?.address;
+  // AccountAddress is an object, so keep a string for effect deps and callers.
+  const address = account?.address?.toString();
 
   const refresh = useCallback(() => {
     if (!address) return;
@@ -50,13 +51,12 @@ export function WalletBadge() {
   }, [address, refresh]);
 
   const copyAddress = useCallback(() => {
-    const addr = account?.address;
-    if (!addr) return;
+    if (!address) return;
     void navigator.clipboard
-      .writeText(addr)
+      .writeText(address)
       .then(() => toast("Address copied"))
       .catch(() => toast("Copy failed"));
-  }, [account?.address]);
+  }, [address]);
 
   if (!account) {
     return (
@@ -85,7 +85,7 @@ export function WalletBadge() {
         title="Copy address"
         className="px-2.5 py-1.5 font-mono text-content transition-colors duration-100 hover:text-accent-hover"
       >
-        {short(account.address)}
+        {short(address)}
       </button>
       <span className="px-2.5 py-1.5 font-mono text-content-muted">
         {balances.apt.toFixed(2)} APT

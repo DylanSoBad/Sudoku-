@@ -1,9 +1,28 @@
 "use client";
 
 import { AptosWalletAdapterProvider } from "@aptos-labs/wallet-adapter-react";
+import type { AvailableWallets } from "@aptos-labs/wallet-adapter-react";
 import { Network } from "@aptos-labs/ts-sdk";
 import type { PropsWithChildren } from "react";
 import { toast } from "sonner";
+
+/**
+ * `optInWallets` is an allowlist: any wallet whose registered name is missing here
+ * is dropped from both the detected and not-detected lists, so it silently
+ * disappears from the picker. It still has to be set, because the adapter registry
+ * also carries ~30 Solana/Ethereum/Sui entries that would otherwise fill the list.
+ *
+ * "Pontem Wallet" was removed from the adapter's own union but still registers
+ * under that name, so it is cast in rather than locking those users out.
+ */
+const OPT_IN_WALLETS = [
+  "Petra",
+  "Nightly",
+  "OKX Wallet",
+  "Backpack",
+  "Bitget Wallet",
+  "Pontem Wallet",
+] as unknown as ReadonlyArray<AvailableWallets>;
 
 function resolveNetwork(): Network {
   const name = (process.env.NEXT_PUBLIC_APTOS_NETWORK ?? "testnet").toLowerCase();
@@ -19,9 +38,7 @@ function resolveApiKey(): string | undefined {
 }
 
 /**
- * Real Aptos wallet adapter (AIP-62).
- * Opt-in: Petra, Pontem, Nightly (+ Martian if registered as standard wallet).
- * No mock wallets — connect requires an installed extension.
+ * Real Aptos wallet adapter (AIP-62). No mock wallets — connect requires a real wallet.
  */
 export function WalletProvider({ children }: PropsWithChildren) {
   const network = resolveNetwork();
@@ -32,7 +49,7 @@ export function WalletProvider({ children }: PropsWithChildren) {
   return (
     <AptosWalletAdapterProvider
       autoConnect
-      optInWallets={["Petra", "Pontem Wallet", "Nightly"]}
+      optInWallets={OPT_IN_WALLETS}
       dappConfig={{
         network: adapterNetwork as never,
         ...(apiKey

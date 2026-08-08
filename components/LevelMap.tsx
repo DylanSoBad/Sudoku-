@@ -14,7 +14,7 @@ function pad(n: number): string {
 
 export function LevelMap() {
   const { account } = useWallet();
-  const address = account?.address;
+  const address = account?.address?.toString();
   const [cleared, setCleared] = useState<number[]>([]);
 
   const refresh = useCallback(() => {

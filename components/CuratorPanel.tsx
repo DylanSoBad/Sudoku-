@@ -103,7 +103,11 @@ export function CuratorPanel() {
       const name = `shelby-sudoku-level-${level}`;
       const commitHex = toHexBytes(preview);
 
-      await client.upload({ account: account.address, blobName: name, bytes: preview });
+      await client.upload({
+        account: account.address.toString(),
+        blobName: name,
+        bytes: preview,
+      });
       setBlobName(name);
       setCommitment(commitHex);
       setStatus("Uploaded to Shelby");

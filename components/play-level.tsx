@@ -57,6 +57,8 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   const params = useParams<{ level?: string; n?: string }>();
   const router = useRouter();
   const { account, signAndSubmitTransaction } = useWallet();
+  // AccountAddress is an object, so keep a string for effect deps and callers.
+  const address = account?.address?.toString();
   const raw = levelProp !== undefined ? String(levelProp) : (params?.level ?? params?.n ?? "1");
   // Level 0 is the daily-challenge sentinel (see app/play/daily). Campaign is 1–20.
   const parsed = Number(raw);
@@ -102,12 +104,11 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   // E_PASS_INACTIVE when a stale/local pass routed to season_pass::buy_hint.
   useEffect(() => {
     let cancelled = false;
-    const addr = account?.address;
-    if (!addr || !registry) {
+    if (!address || !registry) {
       setSeasonDiscount(false);
       return;
     }
-    void fetchOnChainSeasonPassActive(addr).then((active) => {
+    void fetchOnChainSeasonPassActive(address).then((active) => {
       if (cancelled) return;
       if (active === true) {
         setSeasonDiscount(true);
@@ -121,7 +122,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, [account?.address, registry]);
+  }, [address, registry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,28 +179,27 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setSolvedBoard(boardRef.current?.getBoard() ?? null);
     setSolveMs(Date.now() - startedAt.current);
     setRewardOpen(true);
-    if (account?.address) {
+    if (address) {
       // Campaign progress is HMAC-local; daily does not unlock campaign levels.
       if (!isDaily) {
-        markCleared(account.address, level).catch(() => undefined);
-        recordRun(account.address, level, Date.now() - startedAt.current);
+        markCleared(address, level).catch(() => undefined);
+        recordRun(address, level, Date.now() - startedAt.current);
       } else {
         markDailyComplete();
       }
       bumpStreak();
       window.dispatchEvent(new CustomEvent("shelby:balances"));
     }
-  }, [account?.address, level, isDaily]);
+  }, [address, level, isDaily]);
 
   const refreshHints = useCallback(async () => {
-    const addr = account?.address;
-    if (!addr) {
+    if (!address) {
       setHintCount(0);
       setHintChainOk(false);
       return;
     }
     if (registry) {
-      const onChain = await fetchOnChainHintsUsed(registry, addr, level);
+      const onChain = await fetchOnChainHintsUsed(registry, address, level);
       if (onChain !== null) {
         setHintCount(onChain);
         setHintChainOk(true);
@@ -209,9 +209,9 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
       setHintChainOk(false);
       return;
     }
-    setHintCount(getLocalHintsUsed(addr, level));
+    setHintCount(getLocalHintsUsed(address, level));
     setHintChainOk(false);
-  }, [account?.address, registry, level]);
+  }, [address, registry, level]);
 
   useEffect(() => {
     void refreshHints();
@@ -223,8 +223,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
 
   const buyHint = useCallback(async () => {
     if (!puzzle || buying) return;
-    const addr = account?.address;
-    if (!addr) {
+    if (!address) {
       setError("Connect wallet to buy hints");
       return;
     }
@@ -239,7 +238,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     // a local hint while still honouring the same per-level cap.
     if (!registry) {
       boardRef.current?.fillHint(emptyIdx, puzzle.solution[emptyIdx]);
-      setHintCount(bumpLocalHintsUsed(addr, level));
+      setHintCount(bumpLocalHintsUsed(address, level));
       bumpHistory();
       return;
     }
@@ -256,7 +255,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
     setError(null);
     try {
       // Re-check chain right before signing — localStorage alone caused E_PASS_INACTIVE.
-      const onChainPass = await fetchOnChainSeasonPassActive(addr);
+      const onChainPass = await fetchOnChainSeasonPassActive(address);
       const usePass = onChainPass === true;
       setSeasonDiscount(usePass);
       if (usePass) setSeasonActive(true);
@@ -290,7 +289,7 @@ export function PlayLevelPage({ level: levelProp }: PlayLevelPageProps = {}) {
   }, [
     puzzle,
     buying,
-    account?.address,
+    address,
     hintCount,
     level,
     registry,

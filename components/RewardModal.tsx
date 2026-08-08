@@ -125,12 +125,13 @@ export function RewardModal({
       setClaimError("NEXT_PUBLIC_PUZZLE_REGISTRY_ADDRESS is not set");
       return;
     }
+    const address = account.address.toString();
     setClaiming(true);
     setClaimError(undefined);
     try {
       // Check gas and the treasury before the wallet prompt, so a doomed claim
       // fails with an explanation instead of a raw VM abort.
-      const apt = await getAptBalance(account.address).catch(() => 1);
+      const apt = await getAptBalance(address).catch(() => 1);
       const blocker = await findClaimBlocker(rewardSusd, apt);
       if (blocker) {
         setClaimError(`${blocker.title} — ${blocker.detail}`);
@@ -139,7 +140,7 @@ export function RewardModal({
 
       const ticket =
         board && board.length === 81
-          ? await requestTicket(account.address, level, board, ms)
+          ? await requestTicket(address, level, board, ms)
           : null;
 
       // Level 0 = daily (2x on-chain). Campaign levels 1–20 = flat 0.01.
@@ -157,8 +158,8 @@ export function RewardModal({
       setClaimed(true);
       setClaimTxHash(pending.hash);
       if (!isDaily) {
-        await markCleared(account.address, level);
-        const badges = await awardMilestonesForLevel(account.address, level, {
+        await markCleared(address, level);
+        const badges = await awardMilestonesForLevel(address, level, {
           signAndSubmitTransaction: async (payload) =>
             signAndSubmitTransaction(payload as InputTransactionData),
         });
